@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = ""
+    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET_NAME: str = "product-images"
+    MINIO_PUBLIC_URL: str = "http://localhost:9000"
+    MINIO_USE_SSL: bool = False
 
     @computed_field  # type: ignore[prop-decorator]
     @property

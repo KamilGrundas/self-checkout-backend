@@ -1,5 +1,7 @@
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
+from enum import Enum
 
 from pydantic import EmailStr
 from sqlalchemy import DateTime
@@ -105,6 +107,47 @@ class ItemPublic(ItemBase):
 
 class ItemsPublic(SQLModel):
     data: list[ItemPublic]
+    count: int
+
+
+class ProductUnit(str, Enum):
+    kg = "kg"
+    pcs = "pcs"
+
+
+class ProductBase(SQLModel):
+    name: str = Field(min_length=1, max_length=255)
+    price: Decimal = Field(max_digits=10, decimal_places=2, ge=0)
+    unit: ProductUnit
+    image_url: str | None = Field(default=None, max_length=2048)
+
+
+class ProductCreate(ProductBase):
+    pass
+
+
+class ProductUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    price: Decimal | None = Field(default=None, max_digits=10, decimal_places=2, ge=0)
+    unit: ProductUnit | None = None
+    image_url: str | None = Field(default=None, max_length=2048)
+
+
+class Product(ProductBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+
+
+class ProductPublic(ProductBase):
+    id: uuid.UUID
+    created_at: datetime | None = None
+
+
+class ProductsPublic(SQLModel):
+    data: list[ProductPublic]
     count: int
 
 
