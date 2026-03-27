@@ -1,5 +1,4 @@
 import uuid
-from collections.abc import Sequence
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
@@ -117,6 +116,43 @@ class ProductUnit(str, Enum):
     pcs = "pcs"
 
 
+DEFAULT_CATEGORY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+DEFAULT_CATEGORY_KEY = "other"
+DEFAULT_CATEGORY_NAME = "Other"
+
+
+class CategoryBase(SQLModel):
+    name: str = Field(min_length=1, max_length=255)
+    key: str = Field(min_length=1, max_length=255, unique=True, index=True)
+
+
+class CategoryCreate(SQLModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class CategoryUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class Category(CategoryBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    products: list["Product"] = Relationship(back_populates="category")
+
+
+class CategoryPublic(CategoryBase):
+    id: uuid.UUID
+    created_at: datetime | None = None
+
+
+class CategoriesPublic(SQLModel):
+    data: list[CategoryPublic]
+    count: int
+
+
 class ProductBase(SQLModel):
     name: str = Field(min_length=1, max_length=255)
     price: Decimal = Field(max_digits=10, decimal_places=2, ge=0)
@@ -125,7 +161,7 @@ class ProductBase(SQLModel):
 
 
 class ProductCreate(ProductBase):
-    pass
+    category_id: uuid.UUID | None = None
 
 
 class ProductUpdate(SQLModel):
@@ -133,19 +169,43 @@ class ProductUpdate(SQLModel):
     price: Decimal | None = Field(default=None, max_digits=10, decimal_places=2, ge=0)
     unit: ProductUnit | None = None
     image_url: str | None = Field(default=None, max_length=2048)
+    category_id: uuid.UUID | None = None
 
 
 class Product(ProductBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    category_id: uuid.UUID = Field(
+        foreign_key="category.id", nullable=False, ondelete="RESTRICT"
+    )
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
+    category: Category | None = Relationship(back_populates="products")
 
 
 class ProductPublic(ProductBase):
     id: uuid.UUID
+    category_id: uuid.UUID
+    category_name: str
+    category_key: str
     created_at: datetime | None = None
+
+    @classmethod
+    def from_product(cls, product: "Product") -> "ProductPublic":
+        if not product.category:
+            raise ValueError("Product category must be loaded")
+        return cls(
+            id=product.id,
+            name=product.name,
+            price=product.price,
+            unit=product.unit,
+            image_url=product.image_url,
+            category_id=product.category_id,
+            category_name=product.category.name,
+            category_key=product.category.key,
+            created_at=product.created_at,
+        )
 
 
 class ProductsPublic(SQLModel):

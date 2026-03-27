@@ -1,16 +1,23 @@
 import uuid
+import re
 from typing import Any
 
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
 from app.models import (
+    Category,
+    CategoryCreate,
+    CategoryUpdate,
     CheckoutCounter,
     CheckoutCounterCreate,
     CheckoutCounterUpdate,
     CheckoutSession,
     CheckoutSessionCartItem,
     CheckoutSessionPaymentStatus,
+    DEFAULT_CATEGORY_ID,
+    DEFAULT_CATEGORY_KEY,
+    DEFAULT_CATEGORY_NAME,
     Item,
     ItemCreate,
     Product,
@@ -83,8 +90,58 @@ def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -
     return db_item
 
 
+def _slugify_category_name(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
+    return slug or "category"
+
+
+def ensure_default_category(session: Session) -> Category:
+    category = session.get(Category, DEFAULT_CATEGORY_ID)
+    if category:
+        return category
+
+    category = Category(
+        id=DEFAULT_CATEGORY_ID,
+        key=DEFAULT_CATEGORY_KEY,
+        name=DEFAULT_CATEGORY_NAME,
+    )
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+    return category
+
+
+def create_category(*, session: Session, category_in: CategoryCreate) -> Category:
+    base_key = _slugify_category_name(category_in.name)
+    key = base_key
+    suffix = 2
+
+    while session.exec(select(Category).where(Category.key == key)).first():
+        key = f"{base_key}-{suffix}"
+        suffix += 1
+
+    db_category = Category(name=category_in.name, key=key)
+    session.add(db_category)
+    session.commit()
+    session.refresh(db_category)
+    return db_category
+
+
+def update_category(
+    *, session: Session, db_category: Category, category_in: CategoryUpdate
+) -> Category:
+    category_data = category_in.model_dump(exclude_unset=True)
+    db_category.sqlmodel_update(category_data)
+    session.add(db_category)
+    session.commit()
+    session.refresh(db_category)
+    return db_category
+
+
 def create_product(*, session: Session, product_in: ProductCreate) -> Product:
-    db_product = Product.model_validate(product_in)
+    default_category = ensure_default_category(session)
+    category_id = product_in.category_id or default_category.id
+    db_product = Product.model_validate(product_in, update={"category_id": category_id})
     session.add(db_product)
     session.commit()
     session.refresh(db_product)

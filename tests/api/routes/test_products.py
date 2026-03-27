@@ -6,6 +6,8 @@ from sqlmodel import Session
 
 from app.core import object_storage
 from app.core.config import settings
+from app.models import DEFAULT_CATEGORY_KEY
+from tests.utils.category import create_random_category
 from tests.utils.product import create_random_product
 
 
@@ -24,6 +26,7 @@ def test_create_product(
     assert content["price"] == data["price"]
     assert content["unit"] == data["unit"]
     assert content["image_url"] is None
+    assert content["category_key"] == DEFAULT_CATEGORY_KEY
     assert "id" in content
 
 
@@ -49,6 +52,7 @@ def test_read_product(client: TestClient, db: Session) -> None:
     assert Decimal(content["price"]) == product.price
     assert content["unit"] == product.unit
     assert content["id"] == str(product.id)
+    assert content["category_key"] == DEFAULT_CATEGORY_KEY
 
 
 def test_read_product_not_found(client: TestClient) -> None:
@@ -69,7 +73,14 @@ def test_update_product(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     product = create_random_product(db)
-    data = {"name": "Banana", "price": "9.99", "unit": "pcs", "image_url": None}
+    category = create_random_category(db)
+    data = {
+        "name": "Banana",
+        "price": "9.99",
+        "unit": "pcs",
+        "image_url": None,
+        "category_id": str(category.id),
+    }
     response = client.put(
         f"{settings.API_V1_STR}/products/{product.id}",
         headers=superuser_token_headers,
@@ -81,6 +92,8 @@ def test_update_product(
     assert content["price"] == data["price"]
     assert content["unit"] == data["unit"]
     assert content["id"] == str(product.id)
+    assert content["category_id"] == str(category.id)
+    assert content["category_name"] == category.name
 
 
 def test_update_product_not_found(
@@ -122,6 +135,7 @@ def test_upload_product_image(
     )
     assert response.status_code == 200
     assert response.json()["image_url"] == expected_url
+    assert response.json()["category_key"] == DEFAULT_CATEGORY_KEY
 
 
 def test_upload_product_image_invalid_file(

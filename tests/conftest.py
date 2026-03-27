@@ -2,32 +2,41 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, delete
+from sqlmodel import SQLModel, Session, delete
 
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.main import app
-from app.models import CheckoutCounter, CheckoutSession, Item, Product, User
+from app.models import Category, CheckoutCounter, CheckoutSession, Item, Product, User
 from tests.utils.user import authentication_token_from_email
 from tests.utils.utils import get_superuser_token_headers
 
 
+def reset_test_data(session: Session) -> None:
+    statement = delete(CheckoutSession)
+    session.execute(statement)
+    statement = delete(CheckoutCounter)
+    session.execute(statement)
+    statement = delete(Product)
+    session.execute(statement)
+    statement = delete(Category)
+    session.execute(statement)
+    statement = delete(Item)
+    session.execute(statement)
+    statement = delete(User)
+    session.execute(statement)
+    session.commit()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def db() -> Generator[Session, None, None]:
+    SQLModel.metadata.drop_all(engine)
+    SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
+        reset_test_data(session)
         init_db(session)
         yield session
-        statement = delete(CheckoutSession)
-        session.execute(statement)
-        statement = delete(CheckoutCounter)
-        session.execute(statement)
-        statement = delete(Product)
-        session.execute(statement)
-        statement = delete(Item)
-        session.execute(statement)
-        statement = delete(User)
-        session.execute(statement)
-        session.commit()
+        reset_test_data(session)
 
 
 @pytest.fixture(scope="module")
