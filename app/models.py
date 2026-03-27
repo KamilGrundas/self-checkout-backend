@@ -1,10 +1,12 @@
 import uuid
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 
 from pydantic import EmailStr
-from sqlalchemy import DateTime
+from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -148,6 +150,135 @@ class ProductPublic(ProductBase):
 
 class ProductsPublic(SQLModel):
     data: list[ProductPublic]
+    count: int
+
+
+class CheckoutCounterBase(SQLModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class CheckoutCounterCreate(CheckoutCounterBase):
+    password: str = Field(min_length=1, max_length=255)
+
+
+class CheckoutCounterUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    password: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class CheckoutCounter(CheckoutCounterBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    password_hash: str
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    sessions: list["CheckoutSession"] = Relationship(back_populates="counter")
+
+
+class CheckoutCounterPublic(CheckoutCounterBase):
+    id: uuid.UUID
+    created_at: datetime | None = None
+
+
+class CheckoutCountersPublic(SQLModel):
+    data: list[CheckoutCounterPublic]
+    count: int
+
+
+class CheckoutSessionPaymentStatus(str, Enum):
+    pending = "pending"
+    paid = "paid"
+
+
+class CheckoutSessionCartItem(SQLModel):
+    product_id: uuid.UUID
+    name: str
+    unit: ProductUnit
+    price: float = Field(ge=0)
+    quantity: float = Field(gt=0)
+    quantity_label: str = Field(min_length=1, max_length=255)
+    line_total: float = Field(ge=0)
+    image_url: str | None = Field(default=None, max_length=2048)
+
+
+class CheckoutSessionBase(SQLModel):
+    client_id: str = Field(min_length=1, max_length=255)
+    closed: bool = False
+    payment_status: CheckoutSessionPaymentStatus = CheckoutSessionPaymentStatus.pending
+
+
+class CheckoutSessionConnect(SQLModel):
+    counter_id: uuid.UUID
+    password: str = Field(min_length=1, max_length=255)
+    client_id: str = Field(min_length=1, max_length=255)
+
+
+class CheckoutSessionCartUpdate(SQLModel):
+    counter_id: uuid.UUID
+    password: str = Field(min_length=1, max_length=255)
+    client_id: str = Field(min_length=1, max_length=255)
+    cart: list[CheckoutSessionCartItem] = Field(default_factory=list)
+
+
+class CheckoutSessionPayment(SQLModel):
+    counter_id: uuid.UUID
+    password: str = Field(min_length=1, max_length=255)
+    client_id: str = Field(min_length=1, max_length=255)
+
+
+class CheckoutSession(CheckoutSessionBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    counter_id: uuid.UUID = Field(
+        foreign_key="checkoutcounter.id", nullable=False, ondelete="CASCADE"
+    )
+    created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    updated_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    closed_at: datetime | None = Field(
+        default=None,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    cart: list[dict[str, Any]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False),
+    )
+    counter: CheckoutCounter | None = Relationship(back_populates="sessions")
+
+
+class CheckoutSessionPublic(CheckoutSessionBase):
+    id: uuid.UUID
+    counter_id: uuid.UUID
+    cart: list[CheckoutSessionCartItem]
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    closed_at: datetime | None = None
+
+    @classmethod
+    def from_db(cls, session: "CheckoutSession") -> "CheckoutSessionPublic":
+        cart_items = [
+            CheckoutSessionCartItem.model_validate(item) for item in session.cart or []
+        ]
+        return cls(
+            id=session.id,
+            counter_id=session.counter_id,
+            client_id=session.client_id,
+            closed=session.closed,
+            payment_status=session.payment_status,
+            cart=cart_items,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+            closed_at=session.closed_at,
+        )
+
+
+class CheckoutSessionsPublic(SQLModel):
+    data: list[CheckoutSessionPublic]
     count: int
 
 
