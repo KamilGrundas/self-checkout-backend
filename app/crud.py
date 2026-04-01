@@ -1,11 +1,14 @@
-import uuid
 import re
+import uuid
 from typing import Any
 
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
 from app.models import (
+    DEFAULT_CATEGORY_ID,
+    DEFAULT_CATEGORY_KEY,
+    DEFAULT_CATEGORY_NAME,
     Category,
     CategoryCreate,
     CategoryUpdate,
@@ -15,9 +18,6 @@ from app.models import (
     CheckoutSession,
     CheckoutSessionCartItem,
     CheckoutSessionPaymentStatus,
-    DEFAULT_CATEGORY_ID,
-    DEFAULT_CATEGORY_KEY,
-    DEFAULT_CATEGORY_NAME,
     Item,
     ItemCreate,
     Product,
@@ -181,7 +181,9 @@ def authenticate_checkout_counter(
     if not db_counter:
         verify_password(password, DUMMY_HASH)
         return None
-    verified, updated_password_hash = verify_password(password, db_counter.password_hash)
+    verified, updated_password_hash = verify_password(
+        password, db_counter.password_hash
+    )
     if not verified:
         return None
     if updated_password_hash:

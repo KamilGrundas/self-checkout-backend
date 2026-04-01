@@ -59,7 +59,9 @@ def test_update_default_category_forbidden(
 ) -> None:
     response = client.get(f"{settings.API_V1_STR}/categories/")
     default_category = next(
-        category for category in response.json()["data"] if category["key"] == DEFAULT_CATEGORY_KEY
+        category
+        for category in response.json()["data"]
+        if category["key"] == DEFAULT_CATEGORY_KEY
     )
     update_response = client.put(
         f"{settings.API_V1_STR}/categories/{default_category['id']}",

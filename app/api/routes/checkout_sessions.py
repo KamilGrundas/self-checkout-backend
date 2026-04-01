@@ -26,7 +26,9 @@ def require_counter(
         session=session, counter_id=counter_id, password=password
     )
     if not counter:
-        raise HTTPException(status_code=403, detail="Invalid checkout counter credentials")
+        raise HTTPException(
+            status_code=403, detail="Invalid checkout counter credentials"
+        )
     return counter
 
 
@@ -40,7 +42,10 @@ def require_session(
     checkout_session = session.get(CheckoutSession, session_id)
     if not checkout_session:
         raise HTTPException(status_code=404, detail="Checkout session not found")
-    if checkout_session.counter_id != counter_id or checkout_session.client_id != client_id:
+    if (
+        checkout_session.counter_id != counter_id
+        or checkout_session.client_id != client_id
+    ):
         raise HTTPException(status_code=403, detail="Checkout session access denied")
     return checkout_session
 
@@ -78,7 +83,9 @@ def update_checkout_session_cart(
         client_id=payload.client_id,
     )
     if checkout_session.closed:
-        raise HTTPException(status_code=400, detail="Checkout session is already closed")
+        raise HTTPException(
+            status_code=400, detail="Checkout session is already closed"
+        )
     checkout_session = crud.update_checkout_session_cart(
         session=session,
         db_session=checkout_session,
@@ -101,7 +108,9 @@ def pay_checkout_session(
         client_id=payload.client_id,
     )
     if checkout_session.closed:
-        raise HTTPException(status_code=400, detail="Checkout session is already closed")
+        raise HTTPException(
+            status_code=400, detail="Checkout session is already closed"
+        )
     checkout_session = crud.close_checkout_session(
         session=session,
         db_session=checkout_session,

@@ -1,10 +1,7 @@
-import uuid
-
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.models import CheckoutSession
 from tests.utils.checkout_counter import create_random_checkout_counter
 from tests.utils.product import create_random_product
 
@@ -51,9 +48,7 @@ def test_connect_checkout_session_invalid_credentials(
     assert response.json()["detail"] == "Invalid checkout counter credentials"
 
 
-def test_update_checkout_session_cart(
-    client: TestClient, db: Session
-) -> None:
+def test_update_checkout_session_cart(client: TestClient, db: Session) -> None:
     counter = create_random_checkout_counter(db)
     product = create_random_product(db)
     connect_response = client.post(
@@ -93,9 +88,7 @@ def test_update_checkout_session_cart(
     assert response.json()["cart"][0]["quantity"] == 2
 
 
-def test_pay_checkout_session_closes_session(
-    client: TestClient, db: Session
-) -> None:
+def test_pay_checkout_session_closes_session(client: TestClient, db: Session) -> None:
     counter = create_random_checkout_counter(db)
     connect_response = client.post(
         f"{settings.API_V1_STR}/checkout-sessions/connect",

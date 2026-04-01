@@ -47,7 +47,9 @@ def read_product(session: SessionDep, id: uuid.UUID) -> Any:
     """
     Get product by ID.
     """
-    statement = select(Product).options(selectinload(Product.category)).where(Product.id == id)
+    statement = (
+        select(Product).options(selectinload(Product.category)).where(Product.id == id)
+    )
     product = session.exec(statement).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -66,7 +68,11 @@ def create_product(*, session: SessionDep, product_in: ProductCreate) -> Any:
     if product_in.category_id and not session.get(Category, product_in.category_id):
         raise HTTPException(status_code=404, detail="Category not found")
     product = crud.create_product(session=session, product_in=product_in)
-    statement = select(Product).options(selectinload(Product.category)).where(Product.id == product.id)
+    statement = (
+        select(Product)
+        .options(selectinload(Product.category))
+        .where(Product.id == product.id)
+    )
     product_with_category = session.exec(statement).one()
     return ProductPublic.from_product(product_with_category)
 
@@ -94,7 +100,11 @@ def update_product(
     product.sqlmodel_update(update_dict)
     session.add(product)
     session.commit()
-    statement = select(Product).options(selectinload(Product.category)).where(Product.id == product.id)
+    statement = (
+        select(Product)
+        .options(selectinload(Product.category))
+        .where(Product.id == product.id)
+    )
     product_with_category = session.exec(statement).one()
     return ProductPublic.from_product(product_with_category)
 
@@ -126,7 +136,11 @@ async def upload_product_image(
     )
     session.add(product)
     session.commit()
-    statement = select(Product).options(selectinload(Product.category)).where(Product.id == product.id)
+    statement = (
+        select(Product)
+        .options(selectinload(Product.category))
+        .where(Product.id == product.id)
+    )
     product_with_category = session.exec(statement).one()
     return ProductPublic.from_product(product_with_category)
 

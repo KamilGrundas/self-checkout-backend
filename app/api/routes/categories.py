@@ -7,12 +7,12 @@ from sqlmodel import func, select
 from app import crud
 from app.api.deps import SessionDep, get_current_active_superuser
 from app.models import (
+    DEFAULT_CATEGORY_ID,
     CategoriesPublic,
     Category,
     CategoryCreate,
     CategoryPublic,
     CategoryUpdate,
-    DEFAULT_CATEGORY_ID,
     Message,
 )
 
@@ -49,7 +49,9 @@ def update_category(
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     if category.id == DEFAULT_CATEGORY_ID:
-        raise HTTPException(status_code=400, detail="Default category cannot be renamed")
+        raise HTTPException(
+            status_code=400, detail="Default category cannot be renamed"
+        )
     return crud.update_category(
         session=session,
         db_category=category,
@@ -67,7 +69,9 @@ def delete_category(session: SessionDep, id: uuid.UUID) -> Message:
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     if category.id == DEFAULT_CATEGORY_ID:
-        raise HTTPException(status_code=400, detail="Default category cannot be deleted")
+        raise HTTPException(
+            status_code=400, detail="Default category cannot be deleted"
+        )
     if category.products:
         raise HTTPException(
             status_code=400,
