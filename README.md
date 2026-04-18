@@ -4,6 +4,7 @@ FastAPI backend for the self-checkout platform.
 
 This service is part of a larger setup:
 - Client: `https://github.com/KamilGrundas/self-checkout-client`
+- ML service: `https://github.com/KamilGrundas/self-checkout-ml`
 - Infrastructure: `https://github.com/KamilGrundas/self-checkout-infra`
 
 ## Responsibilities
