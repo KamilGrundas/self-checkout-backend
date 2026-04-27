@@ -158,6 +158,7 @@ class ProductBase(SQLModel):
     price: Decimal = Field(max_digits=10, decimal_places=2, ge=0)
     unit: ProductUnit
     image_url: str | None = Field(default=None, max_length=2048)
+    thumbnail_url: str | None = Field(default=None, max_length=2048)
 
 
 class ProductCreate(ProductBase):
@@ -201,6 +202,7 @@ class ProductPublic(ProductBase):
             price=product.price,
             unit=product.unit,
             image_url=product.image_url,
+            thumbnail_url=product.thumbnail_url,
             category_id=product.category_id,
             category_name=product.category.name,
             category_key=product.category.key,

@@ -134,6 +134,10 @@ async def upload_product_image(
         content_type=file.content_type,
         data=data,
     )
+    product.thumbnail_url = object_storage.store_product_thumbnail(
+        product_id=product.id,
+        data=data,
+    )
     session.add(product)
     session.commit()
     statement = (

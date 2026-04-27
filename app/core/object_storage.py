@@ -7,8 +7,11 @@ from pathlib import Path
 from urllib.parse import quote
 
 from minio import Minio
+from PIL import Image
 
 from app.core.config import settings
+
+THUMBNAIL_SIZE = 250
 
 
 @lru_cache
@@ -52,6 +55,20 @@ def _get_object_name(
     return f"products/{product_id}/{uuid.uuid4()}{suffix.lower()}"
 
 
+def _make_thumbnail(data: bytes) -> bytes:
+    with Image.open(BytesIO(data)) as img:
+        img = img.convert("RGB")
+        w, h = img.size
+        side = min(w, h)
+        left = (w - side) // 2
+        top = (h - side) // 2
+        img = img.crop((left, top, left + side, top + side))
+        img = img.resize((THUMBNAIL_SIZE, THUMBNAIL_SIZE), Image.LANCZOS)
+        out = BytesIO()
+        img.save(out, format="WEBP", quality=85)
+        return out.getvalue()
+
+
 def store_product_image(
     *,
     product_id: uuid.UUID,
@@ -70,6 +87,22 @@ def store_product_image(
         data=BytesIO(data),
         length=len(data),
         content_type=content_type,
+    )
+    base_url = settings.MINIO_PUBLIC_URL.rstrip("/")
+    return f"{base_url}/{settings.MINIO_BUCKET_NAME}/{quote(object_name, safe='/')}"
+
+
+def store_product_thumbnail(*, product_id: uuid.UUID, data: bytes) -> str:
+    ensure_bucket_exists()
+    thumbnail_data = _make_thumbnail(data)
+    object_name = f"products/{product_id}/thumbnail.webp"
+    client = get_minio_client()
+    client.put_object(
+        bucket_name=settings.MINIO_BUCKET_NAME,
+        object_name=object_name,
+        data=BytesIO(thumbnail_data),
+        length=len(thumbnail_data),
+        content_type="image/webp",
     )
     base_url = settings.MINIO_PUBLIC_URL.rstrip("/")
     return f"{base_url}/{settings.MINIO_BUCKET_NAME}/{quote(object_name, safe='/')}"
