@@ -8,6 +8,8 @@ from pydantic import EmailStr
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
+from app.core.object_storage import public_url
+
 
 def get_datetime_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -201,8 +203,10 @@ class ProductPublic(ProductBase):
             name=product.name,
             price=product.price,
             unit=product.unit,
-            image_url=product.image_url,
-            thumbnail_url=product.thumbnail_url,
+            image_url=public_url(product.image_url) if product.image_url else None,
+            thumbnail_url=public_url(product.thumbnail_url)
+            if product.thumbnail_url
+            else None,
             category_id=product.category_id,
             category_name=product.category.name,
             category_key=product.category.key,

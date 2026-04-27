@@ -63,10 +63,15 @@ def _make_thumbnail(data: bytes) -> bytes:
         left = (w - side) // 2
         top = (h - side) // 2
         img = img.crop((left, top, left + side, top + side))
-        img = img.resize((THUMBNAIL_SIZE, THUMBNAIL_SIZE), Image.LANCZOS)
+        img = img.resize((THUMBNAIL_SIZE, THUMBNAIL_SIZE), Image.Resampling.LANCZOS)
         out = BytesIO()
         img.save(out, format="WEBP", quality=85)
         return out.getvalue()
+
+
+def public_url(object_name: str) -> str:
+    base_url = settings.MINIO_PUBLIC_URL.rstrip("/")
+    return f"{base_url}/{settings.MINIO_BUCKET_NAME}/{quote(object_name, safe='/')}"
 
 
 def store_product_image(
@@ -88,8 +93,7 @@ def store_product_image(
         length=len(data),
         content_type=content_type,
     )
-    base_url = settings.MINIO_PUBLIC_URL.rstrip("/")
-    return f"{base_url}/{settings.MINIO_BUCKET_NAME}/{quote(object_name, safe='/')}"
+    return object_name
 
 
 def store_product_thumbnail(*, product_id: uuid.UUID, data: bytes) -> str:
@@ -104,5 +108,4 @@ def store_product_thumbnail(*, product_id: uuid.UUID, data: bytes) -> str:
         length=len(thumbnail_data),
         content_type="image/webp",
     )
-    base_url = settings.MINIO_PUBLIC_URL.rstrip("/")
-    return f"{base_url}/{settings.MINIO_BUCKET_NAME}/{quote(object_name, safe='/')}"
+    return object_name
