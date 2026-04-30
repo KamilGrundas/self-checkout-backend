@@ -10,6 +10,7 @@ from app.models import (
     CheckoutCounter,
     CheckoutCounterCreate,
     CheckoutCounterPublic,
+    CheckoutCounterSelfSettingsUpdate,
     CheckoutCountersPublic,
     CheckoutCounterUpdate,
     Message,
@@ -55,6 +56,26 @@ def update_checkout_counter(
         raise HTTPException(status_code=404, detail="Checkout counter not found")
     return crud.update_checkout_counter(
         session=session, db_counter=counter, counter_in=counter_in
+    )
+
+
+@router.put("/me/settings", response_model=CheckoutCounterPublic)
+def update_self_checkout_counter_settings(
+    *, session: SessionDep, payload: CheckoutCounterSelfSettingsUpdate
+) -> Any:
+    counter = crud.authenticate_checkout_counter(
+        session=session, counter_id=payload.counter_id, password=payload.password
+    )
+    if not counter:
+        raise HTTPException(
+            status_code=403, detail="Invalid checkout counter credentials"
+        )
+    settings_data = payload.model_dump(
+        exclude_unset=True, exclude={"counter_id", "password"}
+    )
+    update = CheckoutCounterUpdate.model_validate(settings_data)
+    return crud.update_checkout_counter(
+        session=session, db_counter=counter, counter_in=update
     )
 
 

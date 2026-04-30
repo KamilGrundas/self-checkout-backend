@@ -219,17 +219,44 @@ class ProductsPublic(SQLModel):
     count: int
 
 
-class CheckoutCounterBase(SQLModel):
+class CheckoutMlMode(str, Enum):
+    off = "off"
+    label = "label"
+    on = "on"
+
+
+class CheckoutCounterSettingsBase(SQLModel):
+    ml_mode: CheckoutMlMode = CheckoutMlMode.off
+    shelf_camera_device_id: str | None = Field(default=None, max_length=255)
+    scale_camera_device_id: str | None = Field(default=None, max_length=255)
+    language: str = Field(default="pl", min_length=2, max_length=8)
+
+
+class CheckoutCounterBase(CheckoutCounterSettingsBase):
     name: str = Field(min_length=1, max_length=255)
 
 
-class CheckoutCounterCreate(CheckoutCounterBase):
+class CheckoutCounterCreate(SQLModel):
+    name: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=255)
 
 
 class CheckoutCounterUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     password: str | None = Field(default=None, min_length=1, max_length=255)
+    ml_mode: CheckoutMlMode | None = None
+    shelf_camera_device_id: str | None = Field(default=None, max_length=255)
+    scale_camera_device_id: str | None = Field(default=None, max_length=255)
+    language: str | None = Field(default=None, min_length=2, max_length=8)
+
+
+class CheckoutCounterSelfSettingsUpdate(SQLModel):
+    counter_id: uuid.UUID
+    password: str = Field(min_length=1, max_length=255)
+    ml_mode: CheckoutMlMode | None = None
+    shelf_camera_device_id: str | None = Field(default=None, max_length=255)
+    scale_camera_device_id: str | None = Field(default=None, max_length=255)
+    language: str | None = Field(default=None, min_length=2, max_length=8)
 
 
 class CheckoutCounter(CheckoutCounterBase, table=True):
@@ -321,6 +348,7 @@ class CheckoutSessionPublic(CheckoutSessionBase):
     id: uuid.UUID
     counter_id: uuid.UUID
     cart: list[CheckoutSessionCartItem]
+    counter_settings: CheckoutCounterSettingsBase
     created_at: datetime | None = None
     updated_at: datetime | None = None
     closed_at: datetime | None = None
@@ -330,6 +358,8 @@ class CheckoutSessionPublic(CheckoutSessionBase):
         cart_items = [
             CheckoutSessionCartItem.model_validate(item) for item in session.cart or []
         ]
+        if session.counter is None:
+            raise ValueError("CheckoutSession.counter must be loaded")
         return cls(
             id=session.id,
             counter_id=session.counter_id,
@@ -337,6 +367,9 @@ class CheckoutSessionPublic(CheckoutSessionBase):
             closed=session.closed,
             payment_status=session.payment_status,
             cart=cart_items,
+            counter_settings=CheckoutCounterSettingsBase.model_validate(
+                session.counter, from_attributes=True
+            ),
             created_at=session.created_at,
             updated_at=session.updated_at,
             closed_at=session.closed_at,
