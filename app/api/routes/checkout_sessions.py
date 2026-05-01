@@ -1,16 +1,19 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from sqlmodel import select
 
 from app import crud
-from app.api.deps import SessionDep
+from app.api.deps import SessionDep, get_current_active_superuser
+from app.core.ws_manager import manager as ws_manager
 from app.models import (
     CheckoutSession,
     CheckoutSessionCartUpdate,
     CheckoutSessionConnect,
     CheckoutSessionPayment,
     CheckoutSessionPublic,
+    CheckoutSessionsPublic,
 )
 
 router = APIRouter(prefix="/checkout-sessions", tags=["checkout-sessions"])
@@ -50,6 +53,22 @@ def require_session(
     return checkout_session
 
 
+@router.get(
+    "/active",
+    response_model=CheckoutSessionsPublic,
+    dependencies=[Depends(get_current_active_superuser)],
+)
+def list_active_checkout_sessions(session: SessionDep) -> Any:
+    statement = (
+        select(CheckoutSession)
+        .where(CheckoutSession.closed.is_(False))
+        .order_by(CheckoutSession.updated_at.desc())
+    )
+    sessions = session.exec(statement).all()
+    data = [CheckoutSessionPublic.from_db(s) for s in sessions]
+    return CheckoutSessionsPublic(data=data, count=len(data))
+
+
 @router.post("/connect", response_model=CheckoutSessionPublic)
 def connect_checkout_session(
     *, session: SessionDep, payload: CheckoutSessionConnect
@@ -71,7 +90,11 @@ def connect_checkout_session(
 
 @router.put("/{id}/cart", response_model=CheckoutSessionPublic)
 def update_checkout_session_cart(
-    *, session: SessionDep, id: uuid.UUID, payload: CheckoutSessionCartUpdate
+    *,
+    session: SessionDep,
+    id: uuid.UUID,
+    payload: CheckoutSessionCartUpdate,
+    background_tasks: BackgroundTasks,
 ) -> Any:
     require_counter(
         session=session, counter_id=payload.counter_id, password=payload.password
@@ -91,12 +114,18 @@ def update_checkout_session_cart(
         db_session=checkout_session,
         cart=payload.cart,
     )
-    return CheckoutSessionPublic.from_db(checkout_session)
+    public = CheckoutSessionPublic.from_db(checkout_session)
+    background_tasks.add_task(_broadcast_session_state, public)
+    return public
 
 
 @router.post("/{id}/pay", response_model=CheckoutSessionPublic)
 def pay_checkout_session(
-    *, session: SessionDep, id: uuid.UUID, payload: CheckoutSessionPayment
+    *,
+    session: SessionDep,
+    id: uuid.UUID,
+    payload: CheckoutSessionPayment,
+    background_tasks: BackgroundTasks,
 ) -> Any:
     require_counter(
         session=session, counter_id=payload.counter_id, password=payload.password
@@ -115,4 +144,17 @@ def pay_checkout_session(
         session=session,
         db_session=checkout_session,
     )
-    return CheckoutSessionPublic.from_db(checkout_session)
+    public = CheckoutSessionPublic.from_db(checkout_session)
+    background_tasks.add_task(_broadcast_session_state, public)
+    return public
+
+
+async def _broadcast_session_state(public: CheckoutSessionPublic) -> None:
+    await ws_manager.broadcast(
+        public.id,
+        {
+            "type": "session_state",
+            "session": public.model_dump(mode="json"),
+            "admin_takeover": ws_manager.is_admin_present(public.id),
+        },
+    )

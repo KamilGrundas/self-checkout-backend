@@ -10,6 +10,7 @@ from app.api.routes import (
     products,
     users,
     utils,
+    ws,
 )
 from app.core.config import settings
 
@@ -22,6 +23,7 @@ api_router.include_router(products.router)
 api_router.include_router(categories.router)
 api_router.include_router(checkout_counters.router)
 api_router.include_router(checkout_sessions.router)
+api_router.include_router(ws.router)
 
 
 if settings.ENVIRONMENT == "local":
