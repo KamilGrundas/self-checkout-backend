@@ -56,8 +56,8 @@ def _get_object_name(
 
 
 def _make_thumbnail(data: bytes) -> bytes:
-    with Image.open(BytesIO(data)) as img:
-        img = img.convert("RGB")
+    with Image.open(BytesIO(data)) as source:
+        img: Image.Image = source.convert("RGB")
         w, h = img.size
         side = min(w, h)
         left = (w - side) // 2
