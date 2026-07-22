@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PROJECT_NAME: Self Checkout Backend CI
+      ENVIRONMENT: local
+      SECRET_KEY: ci-only-secret-key-not-for-deployment
+      FIRST_SUPERUSER: admin@example.com
+      FIRST_SUPERUSER_PASSWORD: ci-only-password
+      POSTGRES_SERVER: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ACCESS_KEY: ci-only
+      MINIO_SECRET_KEY: ci-only
+      MINIO_BUCKET_NAME: product-images
+      MINIO_PUBLIC_URL: http://localhost:9000
+      MINIO_USE_SSL: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.10"
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - name: Lint and type-check
+        run: uv run bash scripts/lint.sh
+      - name: Tests
+        run: uv run bash scripts/tests-start.sh
