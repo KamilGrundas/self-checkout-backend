@@ -2,7 +2,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import func, select
+from sqlmodel import col, func, select
 
 from app import crud
 from app.api.deps import SessionDep, get_current_active_superuser
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 def read_categories(session: SessionDep) -> Any:
     count_statement = select(func.count()).select_from(Category)
     count = session.exec(count_statement).one()
-    statement = select(Category).order_by(Category.name.asc())
+    statement = select(Category).order_by(col(Category.name).asc())
     categories = session.exec(statement).all()
     return CategoriesPublic(data=categories, count=count)
 

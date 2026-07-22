@@ -2,7 +2,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import func, select
+from sqlmodel import col, func, select
 
 from app import crud
 from app.api.deps import SessionDep, get_current_active_superuser
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/checkout-counters", tags=["checkout-counters"])
 def read_checkout_counters(session: SessionDep) -> Any:
     count_statement = select(func.count()).select_from(CheckoutCounter)
     count = session.exec(count_statement).one()
-    statement = select(CheckoutCounter).order_by(CheckoutCounter.created_at.desc())
+    statement = select(CheckoutCounter).order_by(col(CheckoutCounter.created_at).desc())
     counters = session.exec(statement).all()
     return CheckoutCountersPublic(data=counters, count=count)
 
