@@ -2,12 +2,13 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlmodel import select
+from sqlmodel import col, select
 
 from app import crud
 from app.api.deps import SessionDep, get_current_active_superuser
 from app.core.ws_manager import manager as ws_manager
 from app.models import (
+    CheckoutCounter,
     CheckoutSession,
     CheckoutSessionCartUpdate,
     CheckoutSessionConnect,
@@ -24,7 +25,7 @@ def require_counter(
     session: SessionDep,
     counter_id: uuid.UUID,
     password: str,
-):
+) -> CheckoutCounter:
     counter = crud.authenticate_checkout_counter(
         session=session, counter_id=counter_id, password=password
     )
@@ -61,8 +62,8 @@ def require_session(
 def list_active_checkout_sessions(session: SessionDep) -> Any:
     statement = (
         select(CheckoutSession)
-        .where(CheckoutSession.closed.is_(False))
-        .order_by(CheckoutSession.updated_at.desc())
+        .where(col(CheckoutSession.closed).is_(False))
+        .order_by(col(CheckoutSession.updated_at).desc())
     )
     sessions = session.exec(statement).all()
     data = [CheckoutSessionPublic.from_db(s) for s in sessions]

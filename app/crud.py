@@ -2,7 +2,7 @@ import re
 import uuid
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.security import get_password_hash, verify_password
 from app.models import (
@@ -200,7 +200,7 @@ def get_open_checkout_session(
     statement = select(CheckoutSession).where(
         CheckoutSession.counter_id == counter_id,
         CheckoutSession.client_id == client_id,
-        CheckoutSession.closed.is_(False),
+        col(CheckoutSession.closed).is_(False),
     )
     return session.exec(statement).first()
 

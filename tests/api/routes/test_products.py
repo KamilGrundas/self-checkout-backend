@@ -116,7 +116,12 @@ def test_upload_product_image(
     monkeypatch,
 ) -> None:
     product = create_random_product(db)
+    image_object_name = "products/test.png"
+    thumbnail_object_name = "products/test/thumbnail.webp"
     expected_url = "http://localhost:9000/product-images/products/test.png"
+    expected_thumbnail_url = (
+        "http://localhost:9000/product-images/products/test/thumbnail.webp"
+    )
 
     def mock_store_product_image(
         *, product_id: uuid.UUID, filename: str | None, content_type: str, data: bytes
@@ -125,9 +130,17 @@ def test_upload_product_image(
         assert filename == "product.png"
         assert content_type == "image/png"
         assert data == b"fake-image"
-        return expected_url
+        return image_object_name
+
+    def mock_store_product_thumbnail(*, product_id: uuid.UUID, data: bytes) -> str:
+        assert product_id == product.id
+        assert data == b"fake-image"
+        return thumbnail_object_name
 
     monkeypatch.setattr(object_storage, "store_product_image", mock_store_product_image)
+    monkeypatch.setattr(
+        object_storage, "store_product_thumbnail", mock_store_product_thumbnail
+    )
     response = client.post(
         f"{settings.API_V1_STR}/products/{product.id}/image",
         headers=superuser_token_headers,
@@ -135,6 +148,7 @@ def test_upload_product_image(
     )
     assert response.status_code == 200
     assert response.json()["image_url"] == expected_url
+    assert response.json()["thumbnail_url"] == expected_thumbnail_url
     assert response.json()["category_key"] == DEFAULT_CATEGORY_KEY
 
 
