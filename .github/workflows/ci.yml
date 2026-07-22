@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18.4
         env:
           POSTGRES_DB: app
           POSTGRES_USER: postgres
@@ -45,10 +45,11 @@ jobs:
       MINIO_PUBLIC_URL: http://localhost:9000
       MINIO_USE_SSL: "false"
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
-          python-version: "3.10"
+          version: "0.11.31"
+          python-version: "3.10.20"
           enable-cache: true
       - run: uv sync --frozen --group dev
       - name: Lint and type-check
