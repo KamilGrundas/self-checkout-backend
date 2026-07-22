@@ -20,7 +20,7 @@ dependencies = [
     "pyjwt<3.0.0,>=2.8.0",
     "pwdlib[argon2,bcrypt]>=0.3.0",
     "minio<8.0.0,>=7.2.15",
-    "pillow>=10.0.0,<12.0.0",
+    "pillow>=12.3.0,<13.0.0",
 ]
 
 [dependency-groups]
