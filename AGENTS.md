@@ -8,6 +8,6 @@ Repository checks are `bash scripts/lint.sh` (mypy strict, Ruff lint, Ruff forma
 
 Use `../ops/dev-sync.sh --repo backend --dry-run`, then `../ops/dev-test.sh --repo backend`. Keep commits focused and imperative. Coordinate API/schema changes with admin, client, and ML repositories and document merge order.
 
-The temporary base branch is `dev` as recorded in `../repos.yaml`; the target base after migration is `main`. Never implement directly on `dev`, `main`, or `master`. Use Conventional Commits with scopes such as `backend`, `api`, `auth`, `db`, `storage`, or `websocket`.
+The base branch is `main` as recorded in `../repos.yaml`. Create short-lived branches from a freshly fetched `origin/main`, and never implement directly on `main` or `master`. Use Conventional Commits with scopes such as `backend`, `api`, `auth`, `db`, `storage`, or `websocket`.
 
 Definition of Done: mypy, Ruff lint, Ruff formatting, backend tests, image build, Compose configuration, and integrated healthchecks pass on remote dev; API and migration compatibility are documented; tests cover changed behavior; no secret or generated coverage output is committed; and rollback is stated.
