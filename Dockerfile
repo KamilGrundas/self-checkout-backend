@@ -1,4 +1,4 @@
-FROM python:3.10.20-bookworm
+FROM python:3.14.6-bookworm
 
 ENV PYTHONUNBUFFERED=1
 

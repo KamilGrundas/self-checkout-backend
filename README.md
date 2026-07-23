@@ -22,8 +22,9 @@ This service is part of a larger setup:
 - SQLModel
 - PostgreSQL
 - Alembic
+- Python 3.14.6
 - MinIO
-- `uv` for environment and dependency management
+- `uv` 0.11.31 for environment and dependency management
 
 ## Required Configuration
 
@@ -53,7 +54,10 @@ MINIO_USE_SSL=false
 
 ## Run Locally
 
+Install Python 3.14.6 and use the pinned interpreter:
+
 ```bash
+uv python install 3.14.6
 uv sync --group dev
 source .venv/bin/activate
 alembic upgrade head
