@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import EmailStr
@@ -12,7 +12,7 @@ from app.core.object_storage import public_url
 
 
 def get_datetime_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # Shared properties
@@ -58,7 +58,7 @@ class User(UserBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
-    items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+    items: list[Item] = Relationship(back_populates="owner", cascade_delete=True)
 
 
 # Properties to return via API, id is always required
@@ -113,7 +113,7 @@ class ItemsPublic(SQLModel):
     count: int
 
 
-class ProductUnit(str, Enum):
+class ProductUnit(StrEnum):
     kg = "kg"
     pcs = "pcs"
 
@@ -142,7 +142,7 @@ class Category(CategoryBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
-    products: list["Product"] = Relationship(back_populates="category")
+    products: list[Product] = Relationship(back_populates="category")
 
 
 class CategoryPublic(CategoryBase):
@@ -195,7 +195,7 @@ class ProductPublic(ProductBase):
     created_at: datetime | None = None
 
     @classmethod
-    def from_product(cls, product: "Product") -> "ProductPublic":
+    def from_product(cls, product: Product) -> ProductPublic:
         if not product.category:
             raise ValueError("Product category must be loaded")
         return cls(
@@ -219,7 +219,7 @@ class ProductsPublic(SQLModel):
     count: int
 
 
-class CheckoutMlMode(str, Enum):
+class CheckoutMlMode(StrEnum):
     off = "off"
     label = "label"
     on = "on"
@@ -266,7 +266,7 @@ class CheckoutCounter(CheckoutCounterBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
-    sessions: list["CheckoutSession"] = Relationship(back_populates="counter")
+    sessions: list[CheckoutSession] = Relationship(back_populates="counter")
 
 
 class CheckoutCounterPublic(CheckoutCounterBase):
@@ -279,7 +279,7 @@ class CheckoutCountersPublic(SQLModel):
     count: int
 
 
-class CheckoutSessionPaymentStatus(str, Enum):
+class CheckoutSessionPaymentStatus(StrEnum):
     pending = "pending"
     paid = "paid"
 
@@ -354,7 +354,7 @@ class CheckoutSessionPublic(CheckoutSessionBase):
     closed_at: datetime | None = None
 
     @classmethod
-    def from_db(cls, session: "CheckoutSession") -> "CheckoutSessionPublic":
+    def from_db(cls, session: CheckoutSession) -> CheckoutSessionPublic:
         cart_items = [
             CheckoutSessionCartItem.model_validate(item) for item in session.cart or []
         ]

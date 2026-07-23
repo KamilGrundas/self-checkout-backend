@@ -138,7 +138,7 @@ def _verify_admin_token(token: str) -> bool:
             token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
         )
         token_data = TokenPayload(**payload)
-    except (InvalidTokenError, ValidationError):
+    except InvalidTokenError, ValidationError:
         return False
     if not token_data.sub:
         return False
