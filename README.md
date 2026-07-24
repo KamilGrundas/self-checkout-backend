@@ -40,17 +40,22 @@ FIRST_SUPERUSER_PASSWORD=change-me
 EMAILS_FROM_EMAIL=info@example.com
 DATABASE_URL=postgresql+psycopg://postgres:change-me@localhost:5432/app
 FRONTEND_HOST=http://localhost:3000
+BACKEND_PUBLIC_URL=http://localhost:8000
 S3_ENDPOINT_URL=http://s3-provider:8080
 S3_REGION=us-east-1
 S3_ACCESS_KEY_ID=dev-access-key
 S3_SECRET_ACCESS_KEY=dev-secret-key
 S3_BUCKET=product-images
-S3_PUBLIC_BASE_URL=http://localhost:8082
 S3_USE_SSL=false
 S3_FORCE_PATH_STYLE=true
 S3_VERIFY_TLS=true
 S3_CREATE_BUCKETS=true
 ```
+
+Product image responses use the backend delivery endpoint derived from
+`BACKEND_PUBLIC_URL`; browsers never connect directly to internal S3 DNS.
+The backend reads each object through the generic S3 client and preserves its
+content type.
 
 ## Run Locally
 

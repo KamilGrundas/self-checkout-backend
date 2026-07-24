@@ -163,6 +163,23 @@ def test_upload_product_image_invalid_file(
     assert response.json()["detail"] == "Invalid image file"
 
 
+def test_read_product_image(client: TestClient, monkeypatch) -> None:
+    def mock_read_product_object(object_name: str) -> tuple[bytes, str]:
+        assert object_name == "products/test/image.jpg"
+        return b"image-content", "image/jpeg"
+
+    monkeypatch.setattr(object_storage, "read_product_object", mock_read_product_object)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/products/object-storage/products/test/image.jpg"
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"image-content"
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.headers["cache-control"] == "public, max-age=3600"
+
+
 def test_delete_product(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:

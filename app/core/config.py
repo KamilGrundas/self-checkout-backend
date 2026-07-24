@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"
+    BACKEND_PUBLIC_URL: AnyHttpUrl | None = None
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
     BACKEND_CORS_ORIGINS: Annotated[
@@ -68,7 +69,6 @@ class Settings(BaseSettings):
     S3_READ_TIMEOUT: int = 30
     S3_MAX_RETRIES: int = 3
     S3_CREATE_BUCKETS: bool = False
-    S3_PUBLIC_BASE_URL: AnyHttpUrl | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -132,6 +132,12 @@ class Settings(BaseSettings):
             self.DATABASE_URL = PostgresDsn(
                 "postgresql+psycopg://postgres:postgres@localhost:5432/app"
             )
+        if self.BACKEND_PUBLIC_URL is None:
+            if not is_local:
+                raise ValueError(
+                    "BACKEND_PUBLIC_URL is required outside local development"
+                )
+            self.BACKEND_PUBLIC_URL = AnyHttpUrl("http://localhost:8000")
 
         if self.S3_ENDPOINT_URL is None:
             if not is_local:

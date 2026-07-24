@@ -49,6 +49,26 @@ class S3ObjectStorage:
             ContentType=content_type,
         )
 
+    def get(self, object_name: str) -> tuple[bytes, str]:
+        try:
+            response = self.client.get_object(Bucket=self.bucket, Key=object_name)
+        except ClientError as exc:
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            code = exc.response.get("Error", {}).get("Code")
+            if status == 404 or code in {"NoSuchKey", "NotFound"}:
+                raise ObjectNotFoundError(object_name) from exc
+            raise
+        body = response["Body"]
+        try:
+            data = body.read()
+        finally:
+            body.close()
+        return data, response.get("ContentType") or "application/octet-stream"
+
+
+class ObjectNotFoundError(Exception):
+    pass
+
 
 @lru_cache
 def get_object_storage() -> S3ObjectStorage:
@@ -105,9 +125,15 @@ def _make_thumbnail(data: bytes) -> bytes:
 
 
 def public_url(object_name: str) -> str:
-    base_url = str(settings.S3_PUBLIC_BASE_URL or settings.S3_ENDPOINT_URL).rstrip("/")
-    bucket = settings.S3_BUCKET
-    return f"{base_url}/{bucket}/{quote(object_name, safe='/')}"
+    if settings.BACKEND_PUBLIC_URL is None:
+        raise RuntimeError("BACKEND_PUBLIC_URL is required")
+    base_url = str(settings.BACKEND_PUBLIC_URL).rstrip("/")
+    encoded_name = quote(object_name, safe="/")
+    return f"{base_url}{settings.API_V1_STR}/products/object-storage/{encoded_name}"
+
+
+def read_product_object(object_name: str) -> tuple[bytes, str]:
+    return get_object_storage().get(object_name)
 
 
 def store_product_image(

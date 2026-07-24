@@ -1,3 +1,4 @@
+from io import BytesIO
 from typing import Any
 
 from botocore.exceptions import ClientError
@@ -26,6 +27,10 @@ class FakeS3Client:
 
     def put_object(self, **kwargs: Any) -> None:
         self.calls.append(("put_object", kwargs))
+
+    def get_object(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("get_object", kwargs))
+        return {"Body": BytesIO(b"image"), "ContentType": "image/jpeg"}
 
 
 def test_put_preserves_content_type() -> None:
@@ -66,3 +71,19 @@ def test_missing_bucket_fails_when_creation_is_disabled() -> None:
         assert "S3_CREATE_BUCKETS=false" in str(exc)
     else:
         raise AssertionError("missing bucket must fail")
+
+
+def test_get_returns_object_body_and_content_type() -> None:
+    client = FakeS3Client()
+    storage = S3ObjectStorage(client, "images", create_bucket=False)  # type: ignore[arg-type]
+
+    data, content_type = storage.get("products/one.jpg")
+
+    assert data == b"image"
+    assert content_type == "image/jpeg"
+    assert client.calls == [
+        (
+            "get_object",
+            {"Bucket": "images", "Key": "products/one.jpg"},
+        )
+    ]

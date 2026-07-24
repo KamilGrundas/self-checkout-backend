@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from sqlalchemy.orm import selectinload
 from sqlmodel import col, func, select
 
@@ -39,6 +39,19 @@ def read_products(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     return ProductsPublic(
         data=[ProductPublic.from_product(product) for product in products],
         count=count,
+    )
+
+
+@router.get("/object-storage/{object_name:path}", include_in_schema=False)
+def read_product_image(object_name: str) -> Response:
+    try:
+        data, content_type = object_storage.read_product_object(object_name)
+    except object_storage.ObjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Product image not found") from exc
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=3600"},
     )
 
 

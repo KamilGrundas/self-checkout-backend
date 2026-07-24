@@ -17,6 +17,8 @@ The backend uses the canonical `DATABASE_URL` and the generic S3 contract
 path-style, timeout, and retry settings). Do not add vendor-specific storage
 SDKs or compatibility aliases. Bucket creation is dev-only and must be
 explicitly enabled; production buckets and policies are externally managed.
+Product image URLs must use the backend delivery endpoint configured by
+`BACKEND_PUBLIC_URL`; never expose internal S3 DNS names to browsers.
 Coordinate breaking API, schema, database, and object-storage changes with ML,
 admin, client, and infra as applicable, then validate the current components
 together on dev.
