@@ -19,12 +19,13 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.0.0,<3.0.0",
     "pyjwt<3.0.0,>=2.8.0",
     "pwdlib[argon2,bcrypt]>=0.3.0",
-    "minio<8.0.0,>=7.2.15",
+    "boto3>=1.35.0,<2.0.0",
     "pillow>=12.3.0,<13.0.0",
 ]
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[s3]>=1.35.0,<2.0.0",
     "pytest>=9.0.3,<10.0.0",
     "mypy<2.0.0,>=1.8.0",
     "ruff<1.0.0,>=0.2.2",

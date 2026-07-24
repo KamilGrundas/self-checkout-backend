@@ -23,7 +23,7 @@ This service is part of a larger setup:
 - PostgreSQL
 - Alembic
 - Python 3.14.6
-- MinIO
+- S3-compatible object storage
 - `uv` 0.11.31 for environment and dependency management
 
 ## Required Configuration
@@ -38,19 +38,24 @@ SECRET_KEY=change-me
 FIRST_SUPERUSER=admin@example.com
 FIRST_SUPERUSER_PASSWORD=change-me
 EMAILS_FROM_EMAIL=info@example.com
-POSTGRES_SERVER=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=app
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=change-me
+DATABASE_URL=postgresql+psycopg://postgres:change-me@localhost:5432/app
 FRONTEND_HOST=http://localhost:3000
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET_NAME=product-images
-MINIO_PUBLIC_URL=http://localhost:9000
-MINIO_USE_SSL=false
+BACKEND_PUBLIC_URL=http://localhost:8000
+S3_ENDPOINT_URL=http://s3-provider:8080
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=dev-access-key
+S3_SECRET_ACCESS_KEY=dev-secret-key
+S3_BUCKET=product-images
+S3_USE_SSL=false
+S3_FORCE_PATH_STYLE=true
+S3_VERIFY_TLS=true
+S3_CREATE_BUCKETS=true
 ```
+
+Product image responses use the backend delivery endpoint derived from
+`BACKEND_PUBLIC_URL`; browsers never connect directly to internal S3 DNS.
+The backend reads each object through the generic S3 client and preserves its
+content type.
 
 ## Run Locally
 

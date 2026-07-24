@@ -29,21 +29,21 @@ jobs:
           --health-retries 10
     env:
       PROJECT_NAME: Self Checkout Backend CI
+      BACKEND_PUBLIC_URL: http://127.0.0.1:8000
       ENVIRONMENT: local
       SECRET_KEY: ci-only-secret-key-not-for-deployment
       FIRST_SUPERUSER: admin@example.com
       FIRST_SUPERUSER_PASSWORD: ci-only-password
-      POSTGRES_SERVER: localhost
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: app
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      MINIO_ENDPOINT: localhost:9000
-      MINIO_ACCESS_KEY: ci-only
-      MINIO_SECRET_KEY: ci-only
-      MINIO_BUCKET_NAME: product-images
-      MINIO_PUBLIC_URL: http://localhost:9000
-      MINIO_USE_SSL: "false"
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/app
+      S3_ENDPOINT_URL: http://127.0.0.1:1
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: ci-only
+      S3_SECRET_ACCESS_KEY: ci-only
+      S3_BUCKET: product-images
+      S3_USE_SSL: "false"
+      S3_FORCE_PATH_STYLE: "true"
+      S3_VERIFY_TLS: "true"
+      S3_CREATE_BUCKETS: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
