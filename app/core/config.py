@@ -3,6 +3,7 @@ import warnings
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
+    AnyHttpUrl,
     AnyUrl,
     BeforeValidator,
     EmailStr,
@@ -49,29 +50,32 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str
     SENTRY_DSN: HttpUrl | None = None
-    POSTGRES_SERVER: str
-    POSTGRES_PORT: int = 5432
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str = ""
-    POSTGRES_DB: str = ""
-    MINIO_ENDPOINT: str = "localhost:9000"
-    MINIO_ACCESS_KEY: str = "minioadmin"
-    MINIO_SECRET_KEY: str = "minioadmin"
-    MINIO_BUCKET_NAME: str = "product-images"
-    MINIO_PUBLIC_URL: str = "http://localhost:9000"
-    MINIO_USE_SSL: bool = False
+    DATABASE_URL: PostgresDsn | None = None
+    DB_CONNECT_TIMEOUT: int = 10
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+
+    S3_ENDPOINT_URL: AnyHttpUrl | None = None
+    S3_REGION: str = "us-east-1"
+    S3_BUCKET: str | None = None
+    S3_ACCESS_KEY_ID: str | None = None
+    S3_SECRET_ACCESS_KEY: str | None = None
+    S3_SESSION_TOKEN: str | None = None
+    S3_USE_SSL: bool = False
+    S3_FORCE_PATH_STYLE: bool = True
+    S3_VERIFY_TLS: bool = True
+    S3_CONNECT_TIMEOUT: int = 5
+    S3_READ_TIMEOUT: int = 30
+    S3_MAX_RETRIES: int = 3
+    S3_CREATE_BUCKETS: bool = False
+    S3_PUBLIC_BASE_URL: AnyHttpUrl | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> PostgresDsn:
-        return PostgresDsn.build(
-            scheme="postgresql+psycopg",
-            username=self.POSTGRES_USER,
-            password=self.POSTGRES_PASSWORD,
-            host=self.POSTGRES_SERVER,
-            port=self.POSTGRES_PORT,
-            path=self.POSTGRES_DB,
-        )
+        if self.DATABASE_URL is None:
+            raise ValueError("DATABASE_URL is required")
+        return self.DATABASE_URL
 
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
@@ -113,11 +117,44 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
         self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
-        self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
         self._check_default_secret(
             "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
         )
 
+        return self
+
+    @model_validator(mode="after")
+    def _validate_external_services(self) -> Self:
+        is_local = self.ENVIRONMENT == "local"
+        if self.DATABASE_URL is None:
+            if not is_local:
+                raise ValueError("DATABASE_URL is required outside local development")
+            self.DATABASE_URL = PostgresDsn(
+                "postgresql+psycopg://postgres:postgres@localhost:5432/app"
+            )
+
+        if self.S3_ENDPOINT_URL is None:
+            if not is_local:
+                raise ValueError(
+                    "S3_ENDPOINT_URL is required outside local development"
+                )
+            self.S3_ENDPOINT_URL = AnyHttpUrl("http://localhost:8082")
+        if self.S3_BUCKET is None:
+            if not is_local:
+                raise ValueError("S3_BUCKET is required outside local development")
+            self.S3_BUCKET = "product-images"
+        if bool(self.S3_ACCESS_KEY_ID) != bool(self.S3_SECRET_ACCESS_KEY):
+            raise ValueError(
+                "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together"
+            )
+        if self.S3_SESSION_TOKEN and not self.S3_ACCESS_KEY_ID:
+            raise ValueError("S3_SESSION_TOKEN requires S3 access credentials")
+        if self.S3_CREATE_BUCKETS and not is_local:
+            raise ValueError("S3_CREATE_BUCKETS is allowed only in local development")
+        if self.S3_ENDPOINT_URL.scheme == "https" and not self.S3_USE_SSL:
+            raise ValueError("S3_USE_SSL must be true for an https S3_ENDPOINT_URL")
+        if self.S3_ENDPOINT_URL.scheme == "http" and self.S3_USE_SSL:
+            raise ValueError("S3_USE_SSL must be false for an http S3_ENDPOINT_URL")
         return self
 
 

@@ -118,10 +118,8 @@ def test_upload_product_image(
     product = create_random_product(db)
     image_object_name = "products/test.png"
     thumbnail_object_name = "products/test/thumbnail.webp"
-    expected_url = "http://localhost:9000/product-images/products/test.png"
-    expected_thumbnail_url = (
-        "http://localhost:9000/product-images/products/test/thumbnail.webp"
-    )
+    expected_url = object_storage.public_url(image_object_name)
+    expected_thumbnail_url = object_storage.public_url(thumbnail_object_name)
 
     def mock_store_product_image(
         *, product_id: uuid.UUID, filename: str | None, content_type: str, data: bytes
