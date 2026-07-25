@@ -34,6 +34,62 @@ def test_get_users_normal_user_me(
     assert current_user["email"] == settings.EMAIL_TEST_USER
 
 
+def test_label_studio_api_key_is_saved_encrypted_for_superuser(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
+) -> None:
+    api_key = "label-studio-personal-access-token"
+
+    response = client.put(
+        f"{settings.API_V1_STR}/users/me/label-studio",
+        headers=superuser_token_headers,
+        json={"api_key": api_key},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"api_key_configured": True}
+
+    user = crud.get_user_by_email(session=db, email=settings.FIRST_SUPERUSER)
+    assert user
+    assert user.label_studio_api_key_encrypted
+    assert user.label_studio_api_key_encrypted != api_key
+    assert api_key not in user.label_studio_api_key_encrypted
+
+    status_response = client.get(
+        f"{settings.API_V1_STR}/users/me/label-studio",
+        headers=superuser_token_headers,
+    )
+    assert status_response.status_code == 200
+    assert status_response.json() == {"api_key_configured": True}
+
+    secret_response = client.get(
+        f"{settings.API_V1_STR}/users/me/label-studio/api-key",
+        headers=superuser_token_headers,
+    )
+    assert secret_response.status_code == 200
+    assert secret_response.json() == {"api_key": api_key}
+
+    profile_response = client.get(
+        f"{settings.API_V1_STR}/users/me",
+        headers=superuser_token_headers,
+    )
+    assert "label_studio_api_key_encrypted" not in profile_response.json()
+
+
+def test_normal_user_cannot_configure_label_studio_api_key(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+) -> None:
+    response = client.put(
+        f"{settings.API_V1_STR}/users/me/label-studio",
+        headers=normal_user_token_headers,
+        json={"api_key": "not-allowed"},
+    )
+
+    assert response.status_code == 403
+
+
 def test_create_user_new_email(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:

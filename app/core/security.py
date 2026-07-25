@@ -1,7 +1,10 @@
+import base64
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
+from cryptography.fernet import Fernet, InvalidToken
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 from pwdlib.hashers.bcrypt import BcryptHasher
@@ -17,6 +20,26 @@ password_hash = PasswordHash(
 
 
 ALGORITHM = "HS256"
+
+
+def _label_studio_api_key_cipher() -> Fernet:
+    key_material = hashlib.sha256(
+        b"self-checkout:label-studio-api-key:" + settings.SECRET_KEY.encode()
+    ).digest()
+    return Fernet(base64.urlsafe_b64encode(key_material))
+
+
+def encrypt_label_studio_api_key(api_key: str) -> str:
+    return _label_studio_api_key_cipher().encrypt(api_key.encode()).decode()
+
+
+def decrypt_label_studio_api_key(encrypted_api_key: str) -> str:
+    try:
+        return (
+            _label_studio_api_key_cipher().decrypt(encrypted_api_key.encode()).decode()
+        )
+    except InvalidToken as exc:
+        raise ValueError("Stored Label Studio API key cannot be decrypted") from exc
 
 
 def create_access_token(
