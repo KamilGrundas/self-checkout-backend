@@ -11,9 +11,17 @@ from app.api.deps import (
     get_current_active_superuser,
 )
 from app.core.config import settings
-from app.core.security import get_password_hash, verify_password
+from app.core.security import (
+    decrypt_label_studio_api_key,
+    encrypt_label_studio_api_key,
+    get_password_hash,
+    verify_password,
+)
 from app.models import (
     Item,
+    LabelStudioApiKeySecret,
+    LabelStudioSettingsPublic,
+    LabelStudioSettingsUpdate,
     Message,
     UpdatePassword,
     User,
@@ -27,6 +35,14 @@ from app.models import (
 from app.utils import generate_new_account_email, send_email
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def _require_superuser(current_user: User) -> None:
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="The user doesn't have enough privileges",
+        )
 
 
 @router.get(
@@ -126,6 +142,58 @@ def read_user_me(current_user: CurrentUser) -> Any:
     Get current user.
     """
     return current_user
+
+
+@router.get("/me/label-studio", response_model=LabelStudioSettingsPublic)
+def read_label_studio_settings(
+    current_user: CurrentUser,
+) -> LabelStudioSettingsPublic:
+    _require_superuser(current_user)
+    return LabelStudioSettingsPublic(
+        api_key_configured=bool(current_user.label_studio_api_key_encrypted)
+    )
+
+
+@router.put("/me/label-studio", response_model=LabelStudioSettingsPublic)
+def update_label_studio_settings(
+    *,
+    session: SessionDep,
+    body: LabelStudioSettingsUpdate,
+    current_user: CurrentUser,
+) -> LabelStudioSettingsPublic:
+    _require_superuser(current_user)
+    api_key = body.api_key.strip()
+    if not api_key:
+        raise HTTPException(status_code=422, detail="Label Studio API key is required")
+    current_user.label_studio_api_key_encrypted = encrypt_label_studio_api_key(api_key)
+    session.add(current_user)
+    session.commit()
+    return LabelStudioSettingsPublic(api_key_configured=True)
+
+
+@router.get(
+    "/me/label-studio/api-key",
+    response_model=LabelStudioApiKeySecret,
+    include_in_schema=False,
+)
+def read_label_studio_api_key(
+    current_user: CurrentUser,
+) -> LabelStudioApiKeySecret:
+    _require_superuser(current_user)
+    encrypted_api_key = current_user.label_studio_api_key_encrypted
+    if not encrypted_api_key:
+        raise HTTPException(
+            status_code=404,
+            detail="Label Studio API key is not configured",
+        )
+    try:
+        api_key = decrypt_label_studio_api_key(encrypted_api_key)
+    except ValueError:
+        raise HTTPException(
+            status_code=500,
+            detail="Stored Label Studio API key is unavailable",
+        )
+    return LabelStudioApiKeySecret(api_key=api_key)
 
 
 @router.delete("/me", response_model=Message)

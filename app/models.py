@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Any
 
 from pydantic import EmailStr
-from sqlalchemy import JSON, Column, DateTime
+from sqlalchemy import JSON, Column, DateTime, Text
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.object_storage import public_url
@@ -50,6 +50,18 @@ class UpdatePassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class LabelStudioSettingsUpdate(SQLModel):
+    api_key: str = Field(min_length=1, max_length=2048)
+
+
+class LabelStudioSettingsPublic(SQLModel):
+    api_key_configured: bool
+
+
+class LabelStudioApiKeySecret(SQLModel):
+    api_key: str
+
+
 # Database model, database table inferred from class name
 class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -57,6 +69,10 @@ class User(UserBase, table=True):
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    label_studio_api_key_encrypted: str | None = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
     )
     items: list[Item] = Relationship(back_populates="owner", cascade_delete=True)
 
