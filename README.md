@@ -14,6 +14,8 @@ This service is part of a larger setup:
 - persistent checkout sessions,
 - cart synchronization,
 - session payment and closing,
+- checkout-counter camera inventory and per-session settings snapshots,
+- superuser-managed scale-autolabel inference settings,
 - product image storage integration.
 
 ## Stack
@@ -80,9 +82,28 @@ http://127.0.0.1:8000
 - `GET /api/v1/utils/health-check/`
 - `GET /api/v1/products/`
 - `POST /api/v1/checkout-counters/`
+- `PUT /api/v1/checkout-counters/{id}` — superuser counter, mode, language,
+  and camera selection; camera identifiers must come from the latest successful
+  client report
+- `PUT /api/v1/checkout-counters/me/settings` — authenticated counter settings
 - `POST /api/v1/checkout-sessions/connect`
 - `PUT /api/v1/checkout-sessions/{id}/cart`
 - `POST /api/v1/checkout-sessions/{id}/pay`
+- `GET /api/v1/system-settings/autolabel` — superuser-only global inference
+  configuration
+- `PUT /api/v1/system-settings/autolabel` — superuser-only update of endpoint,
+  token limit, and connect/read timeouts
+
+The native client includes its current camera inventory when connecting and
+reports it again over the checkout-session WebSocket. Failed camera discovery
+does not erase the last successful inventory. Each new checkout session stores
+a snapshot of the counter's mode, selected cameras, and language; edits made
+while a session is active therefore apply to the next session.
+
+Scale-autolabel settings are stored in a singleton database row. Endpoint URLs
+accept only HTTP(S), reject embedded credentials and fragments, and deliberately
+allow private network addresses for a local VLM. The ML service reads these
+settings with the initiating superuser JWT.
 
 ## Verification
 

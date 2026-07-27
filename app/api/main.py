@@ -8,6 +8,7 @@ from app.api.routes import (
     login,
     private,
     products,
+    system_settings,
     users,
     utils,
     ws,
@@ -20,6 +21,7 @@ api_router.include_router(users.router)
 api_router.include_router(utils.router)
 api_router.include_router(items.router)
 api_router.include_router(products.router)
+api_router.include_router(system_settings.router)
 api_router.include_router(categories.router)
 api_router.include_router(checkout_counters.router)
 api_router.include_router(checkout_sessions.router)

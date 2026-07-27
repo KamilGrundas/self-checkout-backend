@@ -3,9 +3,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
+from urllib.parse import urlsplit
 
-from pydantic import EmailStr
-from sqlalchemy import JSON, Column, DateTime, Text
+from pydantic import EmailStr, field_validator
+from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Text
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.object_storage import public_url
@@ -60,6 +61,57 @@ class LabelStudioSettingsPublic(SQLModel):
 
 class LabelStudioApiKeySecret(SQLModel):
     api_key: str
+
+
+def validate_inference_endpoint_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    parsed = urlsplit(normalized)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "Inference endpoint must be an http(s) URL without credentials or fragment"
+        )
+    return normalized
+
+
+class AutolabelSettingsBase(SQLModel):
+    endpoint_url: str | None = Field(default=None, max_length=2048)
+    max_tokens: int = Field(default=512, ge=1, le=4096)
+    connect_timeout_seconds: int = Field(default=5, ge=1, le=30)
+    read_timeout_seconds: int = Field(default=120, ge=1, le=600)
+
+    @field_validator("endpoint_url")
+    @classmethod
+    def validate_endpoint_url(cls, value: str | None) -> str | None:
+        return validate_inference_endpoint_url(value)
+
+
+class AutolabelSettingsUpdate(AutolabelSettingsBase):
+    pass
+
+
+class AutolabelSettingsPublic(AutolabelSettingsBase):
+    configured: bool
+    updated_at: datetime | None = None
+
+
+class AutolabelSettings(AutolabelSettingsBase, table=True):
+    __table_args__ = (CheckConstraint("id = 1", name="ck_autolabelsettings_singleton"),)
+
+    id: int = Field(default=1, primary_key=True)
+    updated_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
 
 
 # Database model, database table inferred from class name
@@ -248,6 +300,30 @@ class CheckoutCounterSettingsBase(SQLModel):
     language: str = Field(default="pl", min_length=2, max_length=8)
 
 
+class CheckoutCameraInfo(SQLModel):
+    device_id: str = Field(min_length=1, max_length=255)
+    label: str = Field(min_length=1, max_length=255)
+    index: int = Field(ge=0, le=65535)
+
+
+class CheckoutCameraReport(SQLModel):
+    available_cameras: list[CheckoutCameraInfo] = Field(
+        default_factory=list,
+        max_length=32,
+    )
+    camera_discovery_succeeded: bool = True
+
+    @field_validator("available_cameras")
+    @classmethod
+    def unique_camera_device_ids(
+        cls, cameras: list[CheckoutCameraInfo]
+    ) -> list[CheckoutCameraInfo]:
+        device_ids = [camera.device_id for camera in cameras]
+        if len(device_ids) != len(set(device_ids)):
+            raise ValueError("Camera device IDs must be unique")
+        return cameras
+
+
 class CheckoutCounterBase(CheckoutCounterSettingsBase):
     name: str = Field(min_length=1, max_length=255)
 
@@ -282,12 +358,22 @@ class CheckoutCounter(CheckoutCounterBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
+    available_cameras: list[dict[str, Any]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False),
+    )
+    available_cameras_updated_at: datetime | None = Field(
+        default=None,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
     sessions: list[CheckoutSession] = Relationship(back_populates="counter")
 
 
 class CheckoutCounterPublic(CheckoutCounterBase):
     id: uuid.UUID
     created_at: datetime | None = None
+    available_cameras: list[CheckoutCameraInfo] = Field(default_factory=list)
+    available_cameras_updated_at: datetime | None = None
 
 
 class CheckoutCountersPublic(SQLModel):
@@ -317,7 +403,7 @@ class CheckoutSessionBase(SQLModel):
     payment_status: CheckoutSessionPaymentStatus = CheckoutSessionPaymentStatus.pending
 
 
-class CheckoutSessionConnect(SQLModel):
+class CheckoutSessionConnect(CheckoutCameraReport):
     counter_id: uuid.UUID
     password: str = Field(min_length=1, max_length=255)
     client_id: str = Field(min_length=1, max_length=255)
@@ -357,6 +443,10 @@ class CheckoutSession(CheckoutSessionBase, table=True):
         default_factory=list,
         sa_column=Column(JSON, nullable=False),
     )
+    counter_settings: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False),
+    )
     counter: CheckoutCounter | None = Relationship(back_populates="sessions")
 
 
@@ -384,7 +474,7 @@ class CheckoutSessionPublic(CheckoutSessionBase):
             payment_status=session.payment_status,
             cart=cart_items,
             counter_settings=CheckoutCounterSettingsBase.model_validate(
-                session.counter, from_attributes=True
+                session.counter_settings
             ),
             created_at=session.created_at,
             updated_at=session.updated_at,
