@@ -1,4 +1,5 @@
 import asyncio
+import json
 import uuid
 from typing import Any
 
@@ -14,6 +15,8 @@ from app.core.config import settings
 from app.core.db import engine
 from app.core.ws_manager import manager
 from app.models import (
+    CheckoutCameraReport,
+    CheckoutCounter,
     CheckoutSession,
     CheckoutSessionCartItem,
     CheckoutSessionPublic,
@@ -80,7 +83,30 @@ async def checkout_session_ws(
     heartbeat_task = asyncio.create_task(_send_heartbeat(websocket))
     try:
         while True:
-            await websocket.receive_text()
+            raw_payload = await websocket.receive_text()
+            try:
+                payload = json.loads(raw_payload)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("type") != "available_cameras":
+                continue
+            try:
+                report = CheckoutCameraReport.model_validate(payload)
+            except ValidationError:
+                await websocket.send_json(
+                    {"type": "error", "code": "invalid_camera_report"}
+                )
+                continue
+            with Session(engine) as session:
+                counter = session.get(CheckoutCounter, counter_id)
+                if counter is not None and report.camera_discovery_succeeded:
+                    crud.update_checkout_counter_cameras(
+                        session=session,
+                        db_counter=counter,
+                        cameras=report.available_cameras,
+                    )
     except WebSocketDisconnect:
         pass
     except Exception:

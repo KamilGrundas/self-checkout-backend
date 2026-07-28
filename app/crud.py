@@ -12,8 +12,10 @@ from app.models import (
     Category,
     CategoryCreate,
     CategoryUpdate,
+    CheckoutCameraInfo,
     CheckoutCounter,
     CheckoutCounterCreate,
+    CheckoutCounterSettingsBase,
     CheckoutCounterUpdate,
     CheckoutSession,
     CheckoutSessionCartItem,
@@ -174,6 +176,22 @@ def update_checkout_counter(
     return db_counter
 
 
+def update_checkout_counter_cameras(
+    *,
+    session: Session,
+    db_counter: CheckoutCounter,
+    cameras: list[CheckoutCameraInfo],
+) -> CheckoutCounter:
+    db_counter.available_cameras = [
+        camera.model_dump(mode="json") for camera in cameras
+    ]
+    db_counter.available_cameras_updated_at = get_datetime_utc()
+    session.add(db_counter)
+    session.commit()
+    session.refresh(db_counter)
+    return db_counter
+
+
 def authenticate_checkout_counter(
     *, session: Session, counter_id: uuid.UUID, password: str
 ) -> CheckoutCounter | None:
@@ -208,7 +226,17 @@ def get_open_checkout_session(
 def create_checkout_session(
     *, session: Session, counter_id: uuid.UUID, client_id: str
 ) -> CheckoutSession:
-    db_obj = CheckoutSession(counter_id=counter_id, client_id=client_id)
+    counter = session.get(CheckoutCounter, counter_id)
+    if counter is None:
+        raise ValueError("Checkout counter not found")
+    counter_settings = CheckoutCounterSettingsBase.model_validate(
+        counter, from_attributes=True
+    )
+    db_obj = CheckoutSession(
+        counter_id=counter_id,
+        client_id=client_id,
+        counter_settings=counter_settings.model_dump(mode="json"),
+    )
     session.add(db_obj)
     session.commit()
     session.refresh(db_obj)

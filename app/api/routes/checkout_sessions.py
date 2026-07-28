@@ -74,9 +74,15 @@ def list_active_checkout_sessions(session: SessionDep) -> Any:
 def connect_checkout_session(
     *, session: SessionDep, payload: CheckoutSessionConnect
 ) -> Any:
-    require_counter(
+    counter = require_counter(
         session=session, counter_id=payload.counter_id, password=payload.password
     )
+    if payload.camera_discovery_succeeded:
+        crud.update_checkout_counter_cameras(
+            session=session,
+            db_counter=counter,
+            cameras=payload.available_cameras,
+        )
     checkout_session = crud.get_open_checkout_session(
         session=session, counter_id=payload.counter_id, client_id=payload.client_id
     )
@@ -146,7 +152,7 @@ def pay_checkout_session(
         db_session=checkout_session,
     )
     public = CheckoutSessionPublic.from_db(checkout_session)
-    background_tasks.add_task(_broadcast_session_state, public)
+    background_tasks.add_task(_broadcast_paid_session_and_disconnect, public)
     return public
 
 
@@ -159,3 +165,18 @@ async def _broadcast_session_state(public: CheckoutSessionPublic) -> None:
             "admin_takeover": ws_manager.is_admin_present(public.id),
         },
     )
+
+
+async def _broadcast_paid_session_and_disconnect(
+    public: CheckoutSessionPublic,
+) -> None:
+    await ws_manager.broadcast(
+        public.id,
+        {
+            "type": "session_state",
+            "session": public.model_dump(mode="json"),
+            "admin_takeover": ws_manager.is_admin_present(public.id),
+        },
+        to_clients=False,
+    )
+    await ws_manager.disconnect_clients(public.id)

@@ -19,6 +19,27 @@ from app.models import (
 router = APIRouter(prefix="/checkout-counters", tags=["checkout-counters"])
 
 
+def _validate_camera_selection(
+    counter: CheckoutCounter,
+    update: CheckoutCounterUpdate,
+) -> None:
+    available_ids = {
+        str(camera.get("device_id"))
+        for camera in counter.available_cameras
+        if camera.get("device_id")
+    }
+    for field_name in ("shelf_camera_device_id", "scale_camera_device_id"):
+        if field_name not in update.model_fields_set:
+            continue
+        value = getattr(update, field_name)
+        current = getattr(counter, field_name)
+        if value is not None and value != current and value not in available_ids:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Selected {field_name} is not available on this checkout counter",
+            )
+
+
 @router.get(
     "/",
     response_model=CheckoutCountersPublic,
@@ -54,6 +75,7 @@ def update_checkout_counter(
     counter = session.get(CheckoutCounter, id)
     if not counter:
         raise HTTPException(status_code=404, detail="Checkout counter not found")
+    _validate_camera_selection(counter, counter_in)
     return crud.update_checkout_counter(
         session=session, db_counter=counter, counter_in=counter_in
     )
@@ -74,6 +96,7 @@ def update_self_checkout_counter_settings(
         exclude_unset=True, exclude={"counter_id", "password"}
     )
     update = CheckoutCounterUpdate.model_validate(settings_data)
+    _validate_camera_selection(counter, update)
     return crud.update_checkout_counter(
         session=session, db_counter=counter, counter_in=update
     )
