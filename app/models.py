@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from pydantic import EmailStr, field_validator
-from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Text
+from sqlalchemy import JSON, CheckConstraint, Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.object_storage import public_url
@@ -49,18 +49,6 @@ class UserUpdateMe(SQLModel):
 class UpdatePassword(SQLModel):
     current_password: str = Field(min_length=8, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
-
-
-class LabelStudioSettingsUpdate(SQLModel):
-    api_key: str = Field(min_length=1, max_length=2048)
-
-
-class LabelStudioSettingsPublic(SQLModel):
-    api_key_configured: bool
-
-
-class LabelStudioApiKeySecret(SQLModel):
-    api_key: str
 
 
 def validate_inference_endpoint_url(value: str | None) -> str | None:
@@ -121,10 +109,6 @@ class User(UserBase, table=True):
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
-    )
-    label_studio_api_key_encrypted: str | None = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True),
     )
     items: list[Item] = Relationship(back_populates="owner", cascade_delete=True)
 
