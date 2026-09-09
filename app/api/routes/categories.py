@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import col, func, select
 
 from app import crud
-from app.api.deps import SessionDep, get_current_active_superuser
+from app.api.deps import SessionDep, require_catalog_read, require_catalog_write
 from app.models import (
     DEFAULT_CATEGORY_ID,
     CategoriesPublic,
@@ -19,7 +19,9 @@ from app.models import (
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 
-@router.get("/", response_model=CategoriesPublic)
+@router.get(
+    "/", response_model=CategoriesPublic, dependencies=[Depends(require_catalog_read)]
+)
 def read_categories(session: SessionDep) -> Any:
     count_statement = select(func.count()).select_from(Category)
     count = session.exec(count_statement).one()
@@ -31,7 +33,7 @@ def read_categories(session: SessionDep) -> Any:
 @router.post(
     "/",
     response_model=CategoryPublic,
-    dependencies=[Depends(get_current_active_superuser)],
+    dependencies=[Depends(require_catalog_write)],
 )
 def create_category(*, session: SessionDep, category_in: CategoryCreate) -> Any:
     return crud.create_category(session=session, category_in=category_in)
@@ -40,7 +42,7 @@ def create_category(*, session: SessionDep, category_in: CategoryCreate) -> Any:
 @router.put(
     "/{id}",
     response_model=CategoryPublic,
-    dependencies=[Depends(get_current_active_superuser)],
+    dependencies=[Depends(require_catalog_write)],
 )
 def update_category(
     *, session: SessionDep, id: uuid.UUID, category_in: CategoryUpdate
@@ -62,7 +64,7 @@ def update_category(
 @router.delete(
     "/{id}",
     response_model=Message,
-    dependencies=[Depends(get_current_active_superuser)],
+    dependencies=[Depends(require_catalog_write)],
 )
 def delete_category(session: SessionDep, id: uuid.UUID) -> Message:
     category = session.get(Category, id)

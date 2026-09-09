@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.db import engine, init_db
 from app.main import app
 from app.models import (
+    ApiKey,
     AutolabelSettings,
     Category,
     CheckoutCounter,
@@ -21,6 +22,7 @@ from tests.utils.utils import get_superuser_token_headers
 
 
 def reset_test_data(session: Session) -> None:
+    session.execute(delete(ApiKey))
     session.execute(delete(AutolabelSettings))
     statement = delete(CheckoutSession)
     session.execute(statement)
@@ -38,7 +40,7 @@ def reset_test_data(session: Session) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def db() -> Generator[Session, None, None]:
+def db() -> Generator[Session]:
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
@@ -49,7 +51,7 @@ def db() -> Generator[Session, None, None]:
 
 
 @pytest.fixture(scope="module")
-def client() -> Generator[TestClient, None, None]:
+def client() -> Generator[TestClient]:
     with TestClient(app) as c:
         yield c
 

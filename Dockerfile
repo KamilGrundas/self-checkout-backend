@@ -22,22 +22,21 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 # Install dependencies
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
+# Copy locked build inputs for portable rootless builds (including SELinux hosts).
+COPY pyproject.toml uv.lock /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-workspace --package app
 
 COPY ./scripts /app/backend/scripts
 
-COPY ./pyproject.toml ./alembic.ini /app/backend/
+COPY ./pyproject.toml ./uv.lock ./alembic.ini /app/backend/
 
 COPY ./app /app/backend/app
+COPY ./tests /app/backend/tests
 
 # Sync the project
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --package app
 
 WORKDIR /app/backend/

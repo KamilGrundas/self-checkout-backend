@@ -43,9 +43,13 @@ def test_create_product_not_enough_permissions(
     assert response.json()["detail"] == "The user doesn't have enough privileges"
 
 
-def test_read_product(client: TestClient, db: Session) -> None:
+def test_read_product(
+    client: TestClient, db: Session, superuser_token_headers: dict[str, str]
+) -> None:
     product = create_random_product(db)
-    response = client.get(f"{settings.API_V1_STR}/products/{product.id}")
+    response = client.get(
+        f"{settings.API_V1_STR}/products/{product.id}", headers=superuser_token_headers
+    )
     assert response.status_code == 200
     content = response.json()
     assert content["name"] == product.name
@@ -55,16 +59,25 @@ def test_read_product(client: TestClient, db: Session) -> None:
     assert content["category_key"] == DEFAULT_CATEGORY_KEY
 
 
-def test_read_product_not_found(client: TestClient) -> None:
-    response = client.get(f"{settings.API_V1_STR}/products/{uuid.uuid4()}")
+def test_read_product_not_found(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/products/{uuid.uuid4()}",
+        headers=superuser_token_headers,
+    )
     assert response.status_code == 404
     assert response.json()["detail"] == "Product not found"
 
 
-def test_read_products(client: TestClient, db: Session) -> None:
+def test_read_products(
+    client: TestClient, db: Session, superuser_token_headers: dict[str, str]
+) -> None:
     create_random_product(db)
     create_random_product(db)
-    response = client.get(f"{settings.API_V1_STR}/products/")
+    response = client.get(
+        f"{settings.API_V1_STR}/products/", headers=superuser_token_headers
+    )
     assert response.status_code == 200
     assert len(response.json()["data"]) >= 2
 

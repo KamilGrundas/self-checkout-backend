@@ -102,7 +102,7 @@ while a session is active therefore apply to the next session.
 
 Scale-autolabel settings are stored in a singleton database row. Endpoint URLs
 accept only HTTP(S), reject embedded credentials and fragments, and deliberately
-allow private network addresses for a local VLM. The ML service reads these
+allow private network addresses for a local vision inference provider. The ML service reads these
 settings with the initiating superuser JWT.
 
 ## Verification

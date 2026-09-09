@@ -3,15 +3,11 @@ import json
 import uuid
 from typing import Any
 
-import jwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from jwt.exceptions import InvalidTokenError
 from pydantic import ValidationError
 from sqlmodel import Session
 
 from app import crud
-from app.core import security
-from app.core.config import settings
 from app.core.db import engine
 from app.core.ws_manager import manager
 from app.models import (
@@ -22,8 +18,6 @@ from app.models import (
     CheckoutSessionPublic,
     Product,
     ProductUnit,
-    TokenPayload,
-    User,
 )
 
 router = APIRouter(prefix="/ws", tags=["ws"])
@@ -147,6 +141,9 @@ async def admin_session_ws(
     try:
         while True:
             payload = await websocket.receive_json()
+            if not _verify_admin_token(token):
+                await websocket.close(code=4401)
+                break
             await _handle_admin_command(session_id, payload)
     except WebSocketDisconnect:
         pass
@@ -159,20 +156,15 @@ async def admin_session_ws(
 
 
 def _verify_admin_token(token: str) -> bool:
+    from fastapi import HTTPException
+
+    from app.api.deps import get_current_user
+
     try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
-        )
-        token_data = TokenPayload(**payload)
-    except InvalidTokenError, ValidationError:
+        with Session(engine) as session:
+            return get_current_user(session, token).is_superuser
+    except HTTPException, ValueError:
         return False
-    if not token_data.sub:
-        return False
-    with Session(engine) as session:
-        user = session.get(User, token_data.sub)
-        if not user or not user.is_active or not user.is_superuser:
-            return False
-    return True
 
 
 async def _handle_admin_command(session_id: uuid.UUID, payload: dict[str, Any]) -> None:

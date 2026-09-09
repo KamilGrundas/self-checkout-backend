@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import col, func, select
 
 from app import crud
-from app.api.deps import SessionDep, get_current_active_superuser
+from app.api.deps import SessionDep, require_catalog_read, require_catalog_write
 from app.core import object_storage
 from app.models import (
     Category,
@@ -21,7 +21,9 @@ from app.models import (
 router = APIRouter(prefix="/products", tags=["products"])
 
 
-@router.get("/", response_model=ProductsPublic)
+@router.get(
+    "/", response_model=ProductsPublic, dependencies=[Depends(require_catalog_read)]
+)
 def read_products(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     """
     Retrieve products.
@@ -55,7 +57,9 @@ def read_product_image(object_name: str) -> Response:
     )
 
 
-@router.get("/{id}", response_model=ProductPublic)
+@router.get(
+    "/{id}", response_model=ProductPublic, dependencies=[Depends(require_catalog_read)]
+)
 def read_product(session: SessionDep, id: uuid.UUID) -> Any:
     """
     Get product by ID.
@@ -74,7 +78,7 @@ def read_product(session: SessionDep, id: uuid.UUID) -> Any:
 @router.post(
     "/",
     response_model=ProductPublic,
-    dependencies=[Depends(get_current_active_superuser)],
+    dependencies=[Depends(require_catalog_write)],
 )
 def create_product(*, session: SessionDep, product_in: ProductCreate) -> Any:
     """
@@ -95,7 +99,7 @@ def create_product(*, session: SessionDep, product_in: ProductCreate) -> Any:
 @router.put(
     "/{id}",
     response_model=ProductPublic,
-    dependencies=[Depends(get_current_active_superuser)],
+    dependencies=[Depends(require_catalog_write)],
 )
 def update_product(
     *, session: SessionDep, id: uuid.UUID, product_in: ProductUpdate
@@ -127,7 +131,7 @@ def update_product(
 @router.post(
     "/{id}/image",
     response_model=ProductPublic,
-    dependencies=[Depends(get_current_active_superuser)],
+    dependencies=[Depends(require_catalog_write)],
 )
 async def upload_product_image(
     *, session: SessionDep, id: uuid.UUID, file: UploadFile = File(...)
@@ -164,7 +168,7 @@ async def upload_product_image(
     return ProductPublic.from_product(product_with_category)
 
 
-@router.delete("/{id}", dependencies=[Depends(get_current_active_superuser)])
+@router.delete("/{id}", dependencies=[Depends(require_catalog_write)])
 def delete_product(session: SessionDep, id: uuid.UUID) -> Message:
     """
     Delete a product.

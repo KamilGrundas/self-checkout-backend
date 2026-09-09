@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from pydantic import EmailStr, field_validator
-from sqlalchemy import JSON, CheckConstraint, Column, DateTime
+from sqlalchemy import JSON, CheckConstraint, Column, DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.object_storage import public_url
@@ -72,6 +72,7 @@ def validate_inference_endpoint_url(value: str | None) -> str | None:
 
 
 class AutolabelSettingsBase(SQLModel):
+    model_name: str = Field(default="", max_length=512)
     endpoint_url: str | None = Field(default=None, max_length=2048)
     max_tokens: int = Field(default=512, ge=1, le=4096)
     connect_timeout_seconds: int = Field(default=5, ge=1, le=30)
@@ -88,11 +89,17 @@ class AutolabelSettingsUpdate(AutolabelSettingsBase):
 
 
 class AutolabelSettingsPublic(AutolabelSettingsBase):
+    api_key_configured: bool = False
     configured: bool
     updated_at: datetime | None = None
 
 
+class AutolabelSettingsRuntime(AutolabelSettingsPublic):
+    api_key_encrypted: str | None = None
+
+
 class AutolabelSettings(AutolabelSettingsBase, table=True):
+    api_key_encrypted: str | None = Field(default=None, repr=False)
     __table_args__ = (CheckConstraint("id = 1", name="ck_autolabelsettings_singleton"),)
 
     id: int = Field(default=1, primary_key=True)
@@ -104,6 +111,11 @@ class AutolabelSettings(AutolabelSettingsBase, table=True):
 
 # Database model, database table inferred from class name
 class User(UserBase, table=True):
+    __table_args__ = (
+        UniqueConstraint("oidc_issuer", "oidc_subject", name="uq_user_oidc_identity"),
+    )
+    oidc_issuer: str | None = Field(default=None, max_length=2048)
+    oidc_subject: str | None = Field(default=None, max_length=255)
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     created_at: datetime | None = Field(
@@ -113,8 +125,26 @@ class User(UserBase, table=True):
     items: list[Item] = Relationship(back_populates="owner", cascade_delete=True)
 
 
+class ApiKey(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str = Field(max_length=100)
+    key_hash: str = Field(unique=True, index=True, max_length=64)
+    prefix: str = Field(max_length=16)
+    scopes: list[str] = Field(sa_column=Column(JSON, nullable=False))
+    expires_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore
+    role: str | None = Field(default=None, max_length=16)
+    owner_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    revoked: bool = False
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )  # type: ignore
+
+
 # Properties to return via API, id is always required
 class UserPublic(UserBase):
+    auth_source: str = "local"
     id: uuid.UUID
     created_at: datetime | None = None
 

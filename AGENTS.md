@@ -1,24 +1,20 @@
 # Backend repository instructions
 
-FastAPI/SQLModel application. Runtime code is under `app/`, API tests under `tests/`, Alembic migrations under `app/alembic/versions`, and controlled project commands under `scripts/`.
+FastAPI/SQLModel code is in `app/`, API tests in `tests/`, and Alembic
+migrations in `app/alembic/versions`. Start at the workspace root when
+available and read the applicable parent instructions; do not copy host-local
+policy into this repository.
 
-Read `../AGENTS.md` first. Inspect Git with `git -C self-checkout-backend`; never edit directly on `main` or `master`, combine repositories in one commit, or commit `.env`, `.venv`, caches, coverage output, local data, tokens, or object-store credentials. Never rewrite an applied migration; add a new migration and coordinate its deployment explicitly.
+Preserve existing changes and work on `main`. Do not create task branches or
+pull requests in the standard workflow. Commit, push, deployment, and migration
+against a live database require separate explicit approval. Never rewrite an
+applied migration; add a new migration when schema evolution is needed.
 
-Repository checks are `bash scripts/lint.sh` (mypy strict, Ruff lint, Ruff format check) and `bash scripts/tests-start.sh` or `bash scripts/test.sh` when dependencies are ready. Build validation uses the repository Dockerfile. Database-dependent tests, migrations, Docker builds, and integration checks run only on remote dev.
+Run `bash scripts/lint.sh` and the relevant test command when dependencies are
+available. Build validation uses the Dockerfile. Integration validation uses a
+locally selected environment and is not assumed by repository checks.
 
-Use `../ops/dev-sync.sh --repo backend --dry-run`, then `../ops/dev-test.sh --repo backend`. Keep commits focused and imperative. Coordinate API/schema changes with admin, client, and ML repositories and document merge order.
-
-The base branch is `main` as recorded in `../repos.yaml`. Create short-lived branches from a freshly fetched `origin/main`, and never implement directly on `main` or `master`. Use Conventional Commits with scopes such as `backend`, `api`, `auth`, `db`, `storage`, or `websocket`.
-
-Definition of Done: mypy, Ruff lint, Ruff formatting, backend tests, image build, Compose configuration, and integrated healthchecks pass on remote dev; API and migration compatibility are documented; tests cover changed behavior; no secret or generated coverage output is committed; and rollback is stated.
-
-The backend uses the canonical `DATABASE_URL` and the generic S3 contract
-(`S3_ENDPOINT_URL`, `S3_REGION`, `S3_BUCKET`, optional credentials, TLS,
-path-style, timeout, and retry settings). Do not add vendor-specific storage
-SDKs or compatibility aliases. Bucket creation is dev-only and must be
-explicitly enabled; production buckets and policies are externally managed.
-Product image URLs must use the backend delivery endpoint configured by
-`BACKEND_PUBLIC_URL`; never expose internal S3 DNS names to browsers.
-Coordinate breaking API, schema, database, and object-storage changes with ML,
-admin, client, and infra as applicable, then validate the current components
-together on dev.
+Configuration uses generic database, S3-compatible storage, OIDC, and
+OpenAI-compatible vision inference contracts. Do not add host names, provider
+brands, concrete origins, or runtime-specific assumptions. Browser image URLs
+use the configured `BACKEND_PUBLIC_URL`, not internal S3 DNS names.

@@ -8,8 +8,12 @@ from app.models import DEFAULT_CATEGORY_KEY
 from tests.utils.category import create_random_category
 
 
-def test_read_categories(client: TestClient) -> None:
-    response = client.get(f"{settings.API_V1_STR}/categories/")
+def test_read_categories(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    response = client.get(
+        f"{settings.API_V1_STR}/categories/", headers=superuser_token_headers
+    )
     assert response.status_code == 200
     assert any(
         category["key"] == DEFAULT_CATEGORY_KEY for category in response.json()["data"]
@@ -57,7 +61,9 @@ def test_delete_category(
 def test_update_default_category_forbidden(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    response = client.get(f"{settings.API_V1_STR}/categories/")
+    response = client.get(
+        f"{settings.API_V1_STR}/categories/", headers=superuser_token_headers
+    )
     default_category = next(
         category
         for category in response.json()["data"]

@@ -114,8 +114,7 @@ def test_counter_settings_changes_apply_to_next_session(
     assert next_connect.status_code == 200
     assert next_connect.json()["id"] != first_session["id"]
     assert (
-        next_connect.json()["counter_settings"]["scale_camera_device_id"]
-        == "camera-2"
+        next_connect.json()["counter_settings"]["scale_camera_device_id"] == "camera-2"
     )
     assert next_connect.json()["counter_settings"]["ml_mode"] == "on"
 
