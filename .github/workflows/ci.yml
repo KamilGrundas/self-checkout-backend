@@ -55,4 +55,4 @@ jobs:
       - name: Lint and type-check
         run: uv run bash scripts/lint.sh
       - name: Tests
-        run: uv run bash scripts/tests-start.sh
+        run: uv run bash scripts/test.sh

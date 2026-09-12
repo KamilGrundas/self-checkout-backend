@@ -146,10 +146,12 @@ class VisionInferenceIntegration(VisionInferenceIntegrationBase, table=True):
     api_key_encrypted: str | None = Field(default=None, repr=False)
     active: bool = False
     created_at: datetime = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # ty: ignore[invalid-argument-type]
     )  # type: ignore
     updated_at: datetime = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # ty: ignore[invalid-argument-type]
     )  # type: ignore
 
 
@@ -192,7 +194,8 @@ class ApiKey(SQLModel, table=True):
     )
     revoked: bool = False
     created_at: datetime = Field(
-        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # ty: ignore[invalid-argument-type]
     )  # type: ignore
 
 

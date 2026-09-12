@@ -1,4 +1,3 @@
-import secrets
 import warnings
 from typing import Annotated, Any, Literal, Self
 
@@ -34,7 +33,7 @@ class Settings(BaseSettings):
     API_KEYS_ENABLED: bool = True
     LOCAL_SIGNUP_ENABLED: bool = False
 
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    SECRET_KEY: str
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"

@@ -5,9 +5,6 @@ set -x
 
 export PYTHONPATH="/app/backend${PYTHONPATH:+:$PYTHONPATH}"
 
-# Let the DB start
-python -m app.backend_pre_start
-
 # Run migrations
 alembic upgrade head
 

@@ -32,7 +32,7 @@ def read_products(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     count = session.exec(count_statement).one()
     statement = (
         select(Product)
-        .options(selectinload(Product.category))  # type: ignore[arg-type]
+        .options(selectinload(Product.category))  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         .order_by(col(Product.created_at).desc())
         .offset(skip)
         .limit(limit)
@@ -66,7 +66,7 @@ def read_product(session: SessionDep, id: uuid.UUID) -> Any:
     """
     statement = (
         select(Product)
-        .options(selectinload(Product.category))  # type: ignore[arg-type]
+        .options(selectinload(Product.category))  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         .where(Product.id == id)
     )
     product = session.exec(statement).first()
@@ -89,7 +89,7 @@ def create_product(*, session: SessionDep, product_in: ProductCreate) -> Any:
     product = crud.create_product(session=session, product_in=product_in)
     statement = (
         select(Product)
-        .options(selectinload(Product.category))  # type: ignore[arg-type]
+        .options(selectinload(Product.category))  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         .where(Product.id == product.id)
     )
     product_with_category = session.exec(statement).one()
@@ -121,7 +121,7 @@ def update_product(
     session.commit()
     statement = (
         select(Product)
-        .options(selectinload(Product.category))  # type: ignore[arg-type]
+        .options(selectinload(Product.category))  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         .where(Product.id == product.id)
     )
     product_with_category = session.exec(statement).one()
@@ -161,7 +161,7 @@ async def upload_product_image(
     session.commit()
     statement = (
         select(Product)
-        .options(selectinload(Product.category))  # type: ignore[arg-type]
+        .options(selectinload(Product.category))  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         .where(Product.id == product.id)
     )
     product_with_category = session.exec(statement).one()

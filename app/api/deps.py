@@ -34,7 +34,7 @@ TokenDep = Annotated[str | None, Depends(reusable_oauth2)]
 def get_current_user(
     session: SessionDep,
     token: TokenDep,
-    request: Request = None,  # type: ignore[assignment]
+    request: Request = None,  # type: ignore[assignment]  # ty: ignore[invalid-parameter-default]
 ) -> User:
     raw_key = request.headers.get("X-API-Key") if request else None
     if raw_key and token:
