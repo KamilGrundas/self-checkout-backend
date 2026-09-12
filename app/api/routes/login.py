@@ -1,3 +1,4 @@
+import uuid
 from datetime import timedelta
 from typing import Annotated, Any
 
@@ -162,3 +163,25 @@ def check_api_key(request: Request, session: SessionDep, scope: str) -> dict[str
         raise HTTPException(400, "Unsupported scope")
     key = authenticate_api_key(session, request.headers.get("X-API-Key", ""), scope)
     return {"id": str(key.id), "scope": scope}
+
+
+@router.post("/login/checkout-key/check")
+def check_checkout_counter_api_key(
+    request: Request,
+    session: SessionDep,
+    scope: str,
+    checkout_session_id: uuid.UUID | None = None,
+) -> dict[str, str]:
+    from app.core.api_keys import API_KEY_SCOPES, authenticate_checkout_counter_api_key
+    from app.models import CheckoutSession
+
+    if scope not in API_KEY_SCOPES:
+        raise HTTPException(400, "Unsupported scope")
+    key, counter = authenticate_checkout_counter_api_key(
+        session, request.headers.get("X-API-Key", ""), scope
+    )
+    if checkout_session_id is not None:
+        checkout_session = session.get(CheckoutSession, checkout_session_id)
+        if not checkout_session or checkout_session.counter_id != counter.id:
+            raise HTTPException(403, "Checkout session access denied")
+    return {"id": str(key.id), "scope": scope, "counter_id": str(counter.id)}

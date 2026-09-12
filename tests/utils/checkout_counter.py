@@ -6,8 +6,15 @@ from tests.utils.utils import random_lower_string
 
 
 def create_random_checkout_counter(db: Session) -> CheckoutCounter:
-    counter_in = CheckoutCounterCreate(
-        name=f"counter-{random_lower_string()}",
-        password="secret-password",
+    counter, _ = crud.create_checkout_counter(
+        session=db,
+        counter_in=CheckoutCounterCreate(name=f"counter-{random_lower_string()}"),
     )
-    return crud.create_checkout_counter(session=db, counter_in=counter_in)
+    return counter
+
+
+def create_random_checkout_counter_with_key(db: Session) -> tuple[CheckoutCounter, str]:
+    return crud.create_checkout_counter(
+        session=db,
+        counter_in=CheckoutCounterCreate(name=f"counter-{random_lower_string()}"),
+    )

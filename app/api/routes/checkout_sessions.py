@@ -5,10 +5,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlmodel import col, select
 
 from app import crud
-from app.api.deps import SessionDep, get_current_active_superuser
+from app.api.deps import CheckoutCounterDep, SessionDep, get_current_active_superuser
 from app.core.ws_manager import manager as ws_manager
 from app.models import (
-    CheckoutCounter,
     CheckoutSession,
     CheckoutSessionCartUpdate,
     CheckoutSessionConnect,
@@ -20,36 +19,16 @@ from app.models import (
 router = APIRouter(prefix="/checkout-sessions", tags=["checkout-sessions"])
 
 
-def require_counter(
-    *,
-    session: SessionDep,
-    counter_id: uuid.UUID,
-    password: str,
-) -> CheckoutCounter:
-    counter = crud.authenticate_checkout_counter(
-        session=session, counter_id=counter_id, password=password
-    )
-    if not counter:
-        raise HTTPException(
-            status_code=403, detail="Invalid checkout counter credentials"
-        )
-    return counter
-
-
 def require_session(
     *,
     session: SessionDep,
     session_id: uuid.UUID,
     counter_id: uuid.UUID,
-    client_id: str,
 ) -> CheckoutSession:
     checkout_session = session.get(CheckoutSession, session_id)
     if not checkout_session:
         raise HTTPException(status_code=404, detail="Checkout session not found")
-    if (
-        checkout_session.counter_id != counter_id
-        or checkout_session.client_id != client_id
-    ):
+    if checkout_session.counter_id != counter_id:
         raise HTTPException(status_code=403, detail="Checkout session access denied")
     return checkout_session
 
@@ -72,11 +51,8 @@ def list_active_checkout_sessions(session: SessionDep) -> Any:
 
 @router.post("/connect", response_model=CheckoutSessionPublic)
 def connect_checkout_session(
-    *, session: SessionDep, payload: CheckoutSessionConnect
+    *, session: SessionDep, payload: CheckoutSessionConnect, counter: CheckoutCounterDep
 ) -> Any:
-    counter = require_counter(
-        session=session, counter_id=payload.counter_id, password=payload.password
-    )
     if payload.camera_discovery_succeeded:
         crud.update_checkout_counter_cameras(
             session=session,
@@ -84,13 +60,12 @@ def connect_checkout_session(
             cameras=payload.available_cameras,
         )
     checkout_session = crud.get_open_checkout_session(
-        session=session, counter_id=payload.counter_id, client_id=payload.client_id
+        session=session, counter_id=counter.id
     )
     if not checkout_session:
         checkout_session = crud.create_checkout_session(
             session=session,
-            counter_id=payload.counter_id,
-            client_id=payload.client_id,
+            counter_id=counter.id,
         )
     return CheckoutSessionPublic.from_db(checkout_session)
 
@@ -102,15 +77,12 @@ def update_checkout_session_cart(
     id: uuid.UUID,
     payload: CheckoutSessionCartUpdate,
     background_tasks: BackgroundTasks,
+    counter: CheckoutCounterDep,
 ) -> Any:
-    require_counter(
-        session=session, counter_id=payload.counter_id, password=payload.password
-    )
     checkout_session = require_session(
         session=session,
         session_id=id,
-        counter_id=payload.counter_id,
-        client_id=payload.client_id,
+        counter_id=counter.id,
     )
     if checkout_session.closed:
         raise HTTPException(
@@ -131,17 +103,14 @@ def pay_checkout_session(
     *,
     session: SessionDep,
     id: uuid.UUID,
-    payload: CheckoutSessionPayment,
+    _payload: CheckoutSessionPayment,
     background_tasks: BackgroundTasks,
+    counter: CheckoutCounterDep,
 ) -> Any:
-    require_counter(
-        session=session, counter_id=payload.counter_id, password=payload.password
-    )
     checkout_session = require_session(
         session=session,
         session_id=id,
-        counter_id=payload.counter_id,
-        client_id=payload.client_id,
+        counter_id=counter.id,
     )
     if checkout_session.closed:
         raise HTTPException(

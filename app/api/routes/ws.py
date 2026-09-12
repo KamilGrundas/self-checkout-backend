@@ -3,11 +3,12 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 from sqlmodel import Session
 
 from app import crud
+from app.core.api_keys import authenticate_checkout_counter_api_key
 from app.core.db import engine
 from app.core.ws_manager import manager
 from app.models import (
@@ -45,27 +46,27 @@ async def _broadcast_state_for_session(session_id: uuid.UUID) -> None:
 @router.websocket("/checkout-session")
 async def checkout_session_ws(
     websocket: WebSocket,
-    counter_id: uuid.UUID,
-    password: str,
-    client_id: str,
 ) -> None:
     await websocket.accept()
 
     with Session(engine) as session:
-        counter = crud.authenticate_checkout_counter(
-            session=session, counter_id=counter_id, password=password
-        )
-        if not counter:
+        try:
+            _, counter = authenticate_checkout_counter_api_key(
+                session,
+                websocket.headers.get("X-API-Key", ""),
+                "checkout:session",
+            )
+        except HTTPException:
             await websocket.send_json({"type": "error", "code": "auth_failed"})
             await websocket.close(code=4401)
             return
 
         checkout_session = crud.get_open_checkout_session(
-            session=session, counter_id=counter_id, client_id=client_id
+            session=session, counter_id=counter.id
         )
         if not checkout_session:
             checkout_session = crud.create_checkout_session(
-                session=session, counter_id=counter_id, client_id=client_id
+                session=session, counter_id=counter.id
             )
 
         public = CheckoutSessionPublic.from_db(checkout_session)
@@ -94,11 +95,11 @@ async def checkout_session_ws(
                 )
                 continue
             with Session(engine) as session:
-                counter = session.get(CheckoutCounter, counter_id)
-                if counter is not None and report.camera_discovery_succeeded:
+                db_counter = session.get(CheckoutCounter, counter.id)
+                if db_counter is not None and report.camera_discovery_succeeded:
                     crud.update_checkout_counter_cameras(
                         session=session,
-                        db_counter=counter,
+                        db_counter=db_counter,
                         cameras=report.available_cameras,
                     )
     except WebSocketDisconnect:

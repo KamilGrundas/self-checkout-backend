@@ -5,9 +5,14 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.models import ApiKey, User
+from app.models import ApiKey, CheckoutCounter, User
 
-API_KEY_SCOPES = {"catalog:read", "catalog:write", "ml:invoke"}
+API_KEY_SCOPES = {
+    "catalog:read",
+    "catalog:write",
+    "checkout:session",
+    "ml:invoke",
+}
 
 
 def authenticate_api_key(
@@ -35,3 +40,15 @@ def authenticate_api_key(
     if scope is not None and scope not in granted:
         raise HTTPException(403, "API key does not grant the required scope")
     return key
+
+
+def authenticate_checkout_counter_api_key(
+    session: Session, raw: str, scope: str | None = None
+) -> tuple[ApiKey, CheckoutCounter]:
+    key = authenticate_api_key(session, raw, scope)
+    if key.purpose != "checkout_counter" or key.counter_id is None:
+        raise HTTPException(403, "Checkout counter API key required")
+    counter = session.get(CheckoutCounter, key.counter_id)
+    if not counter:
+        raise HTTPException(401, "Checkout counter is unavailable")
+    return key, counter

@@ -71,13 +71,19 @@ def create_api_key(
 
 @router.get("/", response_model=list[ApiKeyPublic])
 def list_api_keys(session: SessionDep) -> list[ApiKey]:
-    return list(session.exec(select(ApiKey).order_by(col(ApiKey.created_at))).all())
+    return list(
+        session.exec(
+            select(ApiKey)
+            .where(ApiKey.purpose == "generic")
+            .order_by(col(ApiKey.created_at))
+        ).all()
+    )
 
 
 @router.delete("/{key_id}", response_model=Message)
 def revoke_api_key(key_id: uuid.UUID, session: SessionDep) -> Message:
     key = session.get(ApiKey, key_id)
-    if not key:
+    if not key or key.purpose != "generic":
         raise HTTPException(404, "API key not found")
     key.revoked = True
     session.add(key)

@@ -81,11 +81,14 @@ http://127.0.0.1:8000
 
 - `GET /api/v1/utils/health-check/`
 - `GET /api/v1/products/`
-- `POST /api/v1/checkout-counters/`
+- `POST /api/v1/checkout-counters/` — creates a counter and returns its
+  one-time API key; the key is bound to that counter and carries only catalog,
+  session, and ML-invocation access
 - `PUT /api/v1/checkout-counters/{id}` — superuser counter, mode, language,
   and camera selection; camera identifiers must come from the latest successful
   client report
-- `PUT /api/v1/checkout-counters/me/settings` — authenticated counter settings
+- `POST /api/v1/checkout-counters/{id}/api-key/rotate` — replaces the counter
+  key and disconnects active clients
 - `POST /api/v1/checkout-sessions/connect`
 - `PUT /api/v1/checkout-sessions/{id}/cart`
 - `POST /api/v1/checkout-sessions/{id}/pay`
@@ -93,6 +96,11 @@ http://127.0.0.1:8000
   configuration
 - `PUT /api/v1/system-settings/autolabel` — superuser-only update of endpoint,
   token limit, and connect/read timeouts
+
+Checkout clients authenticate their operational endpoints with `X-API-Key`.
+They do not submit a counter ID, password, or client/device ID: the backend
+derives the counter from the bound key and maintains at most one open session
+for it.
 
 The native client includes its current camera inventory when connecting and
 reports it again over the checkout-session WebSocket. Failed camera discovery

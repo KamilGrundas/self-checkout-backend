@@ -133,6 +133,12 @@ class ApiKey(SQLModel, table=True):
     scopes: list[str] = Field(sa_column=Column(JSON, nullable=False))
     expires_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore
     role: str | None = Field(default=None, max_length=16)
+    purpose: str = Field(default="generic", max_length=32)
+    counter_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="checkoutcounter.id",
+        ondelete="CASCADE",
+    )
     owner_id: uuid.UUID | None = Field(
         default=None, foreign_key="user.id", ondelete="SET NULL"
     )
@@ -344,21 +350,10 @@ class CheckoutCounterBase(CheckoutCounterSettingsBase):
 
 class CheckoutCounterCreate(SQLModel):
     name: str = Field(min_length=1, max_length=255)
-    password: str = Field(min_length=1, max_length=255)
 
 
 class CheckoutCounterUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    password: str | None = Field(default=None, min_length=1, max_length=255)
-    ml_mode: CheckoutMlMode | None = None
-    shelf_camera_device_id: str | None = Field(default=None, max_length=255)
-    scale_camera_device_id: str | None = Field(default=None, max_length=255)
-    language: str | None = Field(default=None, min_length=2, max_length=8)
-
-
-class CheckoutCounterSelfSettingsUpdate(SQLModel):
-    counter_id: uuid.UUID
-    password: str = Field(min_length=1, max_length=255)
     ml_mode: CheckoutMlMode | None = None
     shelf_camera_device_id: str | None = Field(default=None, max_length=255)
     scale_camera_device_id: str | None = Field(default=None, max_length=255)
@@ -367,7 +362,6 @@ class CheckoutCounterSelfSettingsUpdate(SQLModel):
 
 class CheckoutCounter(CheckoutCounterBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    password_hash: str
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
@@ -395,6 +389,14 @@ class CheckoutCountersPublic(SQLModel):
     count: int
 
 
+class CheckoutCounterCreated(CheckoutCounterPublic):
+    api_key: str
+
+
+class CheckoutCounterApiKeyCreated(SQLModel):
+    api_key: str
+
+
 class CheckoutSessionPaymentStatus(StrEnum):
     pending = "pending"
     paid = "paid"
@@ -412,28 +414,20 @@ class CheckoutSessionCartItem(SQLModel):
 
 
 class CheckoutSessionBase(SQLModel):
-    client_id: str = Field(min_length=1, max_length=255)
     closed: bool = False
     payment_status: CheckoutSessionPaymentStatus = CheckoutSessionPaymentStatus.pending
 
 
 class CheckoutSessionConnect(CheckoutCameraReport):
-    counter_id: uuid.UUID
-    password: str = Field(min_length=1, max_length=255)
-    client_id: str = Field(min_length=1, max_length=255)
+    pass
 
 
 class CheckoutSessionCartUpdate(SQLModel):
-    counter_id: uuid.UUID
-    password: str = Field(min_length=1, max_length=255)
-    client_id: str = Field(min_length=1, max_length=255)
     cart: list[CheckoutSessionCartItem] = Field(default_factory=list)
 
 
 class CheckoutSessionPayment(SQLModel):
-    counter_id: uuid.UUID
-    password: str = Field(min_length=1, max_length=255)
-    client_id: str = Field(min_length=1, max_length=255)
+    pass
 
 
 class CheckoutSession(CheckoutSessionBase, table=True):
@@ -483,7 +477,6 @@ class CheckoutSessionPublic(CheckoutSessionBase):
         return cls(
             id=session.id,
             counter_id=session.counter_id,
-            client_id=session.client_id,
             closed=session.closed,
             payment_status=session.payment_status,
             cart=cart_items,

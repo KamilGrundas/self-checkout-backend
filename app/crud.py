@@ -1,7 +1,10 @@
+import hashlib
 import re
+import secrets
 import uuid
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.core.security import get_password_hash, verify_password
@@ -9,6 +12,7 @@ from app.models import (
     DEFAULT_CATEGORY_ID,
     DEFAULT_CATEGORY_KEY,
     DEFAULT_CATEGORY_NAME,
+    ApiKey,
     Category,
     CategoryCreate,
     CategoryUpdate,
@@ -150,26 +154,59 @@ def create_product(*, session: Session, product_in: ProductCreate) -> Product:
     return db_product
 
 
+CHECKOUT_COUNTER_KEY_SCOPES = ["catalog:read", "checkout:session", "ml:invoke"]
+
+
+def _new_checkout_counter_api_key(counter: CheckoutCounter) -> tuple[ApiKey, str]:
+    raw = "sck_" + secrets.token_urlsafe(32)
+    key = ApiKey(
+        name=f"Checkout counter: {counter.name}",
+        key_hash=hashlib.sha256(raw.encode()).hexdigest(),
+        prefix=raw[:12],
+        scopes=CHECKOUT_COUNTER_KEY_SCOPES,
+        purpose="checkout_counter",
+        counter_id=counter.id,
+    )
+    return key, raw
+
+
 def create_checkout_counter(
     *, session: Session, counter_in: CheckoutCounterCreate
-) -> CheckoutCounter:
-    db_obj = CheckoutCounter.model_validate(
-        counter_in, update={"password_hash": get_password_hash(counter_in.password)}
-    )
+) -> tuple[CheckoutCounter, str]:
+    db_obj = CheckoutCounter.model_validate(counter_in)
     session.add(db_obj)
+    session.flush()
+    key, raw = _new_checkout_counter_api_key(db_obj)
+    session.add(key)
     session.commit()
     session.refresh(db_obj)
-    return db_obj
+    return db_obj, raw
+
+
+def rotate_checkout_counter_api_key(
+    *, session: Session, counter: CheckoutCounter
+) -> str:
+    active_keys = session.exec(
+        select(ApiKey).where(
+            ApiKey.counter_id == counter.id,
+            ApiKey.purpose == "checkout_counter",
+            col(ApiKey.revoked).is_(False),
+        )
+    ).all()
+    for key in active_keys:
+        key.revoked = True
+        session.add(key)
+    key, raw = _new_checkout_counter_api_key(counter)
+    session.add(key)
+    session.commit()
+    return raw
 
 
 def update_checkout_counter(
     *, session: Session, db_counter: CheckoutCounter, counter_in: CheckoutCounterUpdate
 ) -> CheckoutCounter:
     counter_data = counter_in.model_dump(exclude_unset=True)
-    extra_data = {}
-    if "password" in counter_data:
-        extra_data["password_hash"] = get_password_hash(counter_data.pop("password"))
-    db_counter.sqlmodel_update(counter_data, update=extra_data)
+    db_counter.sqlmodel_update(counter_data)
     session.add(db_counter)
     session.commit()
     session.refresh(db_counter)
@@ -192,39 +229,18 @@ def update_checkout_counter_cameras(
     return db_counter
 
 
-def authenticate_checkout_counter(
-    *, session: Session, counter_id: uuid.UUID, password: str
-) -> CheckoutCounter | None:
-    db_counter = session.get(CheckoutCounter, counter_id)
-    if not db_counter:
-        verify_password(password, DUMMY_HASH)
-        return None
-    verified, updated_password_hash = verify_password(
-        password, db_counter.password_hash
-    )
-    if not verified:
-        return None
-    if updated_password_hash:
-        db_counter.password_hash = updated_password_hash
-        session.add(db_counter)
-        session.commit()
-        session.refresh(db_counter)
-    return db_counter
-
-
 def get_open_checkout_session(
-    *, session: Session, counter_id: uuid.UUID, client_id: str
+    *, session: Session, counter_id: uuid.UUID
 ) -> CheckoutSession | None:
     statement = select(CheckoutSession).where(
         CheckoutSession.counter_id == counter_id,
-        CheckoutSession.client_id == client_id,
         col(CheckoutSession.closed).is_(False),
     )
     return session.exec(statement).first()
 
 
 def create_checkout_session(
-    *, session: Session, counter_id: uuid.UUID, client_id: str
+    *, session: Session, counter_id: uuid.UUID
 ) -> CheckoutSession:
     counter = session.get(CheckoutCounter, counter_id)
     if counter is None:
@@ -234,11 +250,17 @@ def create_checkout_session(
     )
     db_obj = CheckoutSession(
         counter_id=counter_id,
-        client_id=client_id,
         counter_settings=counter_settings.model_dump(mode="json"),
     )
     session.add(db_obj)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        existing = get_open_checkout_session(session=session, counter_id=counter_id)
+        if existing:
+            return existing
+        raise
     session.refresh(db_obj)
     return db_obj
 

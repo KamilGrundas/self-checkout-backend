@@ -32,14 +32,12 @@ def upgrade():
         "checkoutcounter",
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("password_hash", sa.String(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
 
     op.create_table(
         "checkoutsession",
-        sa.Column("client_id", sa.String(length=255), nullable=False),
         sa.Column("closed", sa.Boolean(), nullable=False),
         sa.Column("payment_status", checkout_session_payment_status, nullable=False),
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -51,9 +49,17 @@ def upgrade():
         sa.ForeignKeyConstraint(["counter_id"], ["checkoutcounter.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        "uq_checkoutsession_open_counter",
+        "checkoutsession",
+        ["counter_id"],
+        unique=True,
+        postgresql_where=sa.text("closed = false"),
+    )
 
 
 def downgrade():
+    op.drop_index("uq_checkoutsession_open_counter", table_name="checkoutsession")
     op.drop_table("checkoutsession")
     op.drop_table("checkoutcounter")
     checkout_session_payment_status.drop(op.get_bind(), checkfirst=True)

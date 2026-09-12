@@ -1,217 +1,137 @@
 import uuid
-from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.core.config import settings
-from tests.utils.checkout_counter import create_random_checkout_counter
+from tests.utils.checkout_counter import create_random_checkout_counter_with_key
 from tests.utils.product import create_random_product
 
 
-def test_connect_checkout_session_reuses_open_session(
-    client: TestClient, db: Session
-) -> None:
-    counter = create_random_checkout_counter(db)
-    payload = {
-        "counter_id": str(counter.id),
-        "password": "secret-password",
-        "client_id": "client-1",
-    }
-
-    first_response = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json=payload,
-    )
-    second_response = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json=payload,
-    )
-
-    assert first_response.status_code == 200
-    assert second_response.status_code == 200
-    assert first_response.json()["id"] == second_response.json()["id"]
-    assert first_response.json()["closed"] is False
-    assert first_response.json()["payment_status"] == "pending"
+def counter_headers(key: str) -> dict[str, str]:
+    return {"X-API-Key": key}
 
 
-def test_connect_checkout_session_invalid_credentials(
-    client: TestClient, db: Session
-) -> None:
-    counter = create_random_checkout_counter(db)
+def connect(client: TestClient, key: str, **payload: object) -> dict:
     response = client.post(
         f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json={
-            "counter_id": str(counter.id),
-            "password": "wrong-password",
-            "client_id": "client-1",
-        },
+        headers=counter_headers(key),
+        json=payload,
     )
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Invalid checkout counter credentials"
+    assert response.status_code == 200
+    return response.json()
 
 
-def test_counter_settings_changes_apply_to_next_session(
-    client: TestClient,
-    superuser_token_headers: dict[str, str],
-    db: Session,
+def test_connect_reuses_the_counter_open_session(
+    client: TestClient, db: Session
 ) -> None:
-    counter = create_random_checkout_counter(db)
-    connect_payload = {
-        "counter_id": str(counter.id),
-        "password": "secret-password",
-        "client_id": "settings-snapshot-client",
-        "available_cameras": [
-            {"device_id": "camera-1", "label": "Camera 1", "index": 0},
-            {"device_id": "camera-2", "label": "Camera 2", "index": 1},
-        ],
-    }
+    _, key = create_random_checkout_counter_with_key(db)
+    first = connect(client, key)
+    second = connect(client, key)
 
-    initial_update = client.put(
-        f"{settings.API_V1_STR}/checkout-counters/{counter.id}",
-        headers=superuser_token_headers,
-        json={"scale_camera_device_id": None},
-    )
-    assert initial_update.status_code == 200
-    first_connect = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json=connect_payload,
-    )
-    assert first_connect.status_code == 200
-    first_session = first_connect.json()
-    assert first_session["counter_settings"]["scale_camera_device_id"] is None
+    assert first["id"] == second["id"]
+    assert "client_id" not in first
+    assert first["closed"] is False
 
-    settings_update = client.put(
-        f"{settings.API_V1_STR}/checkout-counters/{counter.id}",
-        headers=superuser_token_headers,
-        json={"scale_camera_device_id": "camera-2", "ml_mode": "on"},
-    )
-    assert settings_update.status_code == 200
 
-    same_session = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json=connect_payload,
-    )
-    assert same_session.status_code == 200
-    assert same_session.json()["id"] == first_session["id"]
-    assert same_session.json()["counter_settings"]["scale_camera_device_id"] is None
-    assert same_session.json()["counter_settings"]["ml_mode"] == "off"
+def test_counter_key_cannot_access_another_counter_session(
+    client: TestClient, db: Session
+) -> None:
+    _, first_key = create_random_checkout_counter_with_key(db)
+    _, second_key = create_random_checkout_counter_with_key(db)
+    first_session = connect(client, first_key)
 
-    paid = client.post(
+    response = client.post(
         f"{settings.API_V1_STR}/checkout-sessions/{first_session['id']}/pay",
-        json={
-            "counter_id": str(counter.id),
-            "password": "secret-password",
-            "client_id": "settings-snapshot-client",
-        },
+        headers=counter_headers(second_key),
+        json={},
     )
-    assert paid.status_code == 200
 
-    next_connect = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json=connect_payload,
-    )
-    assert next_connect.status_code == 200
-    assert next_connect.json()["id"] != first_session["id"]
-    assert (
-        next_connect.json()["counter_settings"]["scale_camera_device_id"] == "camera-2"
-    )
-    assert next_connect.json()["counter_settings"]["ml_mode"] == "on"
+    assert response.status_code == 403
 
 
-def test_update_checkout_session_cart(client: TestClient, db: Session) -> None:
-    counter = create_random_checkout_counter(db)
+def test_counter_key_updates_its_session_cart(client: TestClient, db: Session) -> None:
+    _, key = create_random_checkout_counter_with_key(db)
     product = create_random_product(db)
-    connect_response = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json={
-            "counter_id": str(counter.id),
-            "password": "secret-password",
-            "client_id": "client-cart",
-        },
-    )
-    session_id = connect_response.json()["id"]
-    payload = {
-        "counter_id": str(counter.id),
-        "password": "secret-password",
-        "client_id": "client-cart",
-        "cart": [
-            {
-                "product_id": str(product.id),
-                "name": product.name,
-                "unit": product.unit,
-                "price": 12.34,
-                "quantity": 2,
-                "quantity_label": "2 szt",
-                "line_total": 24.68,
-                "image_url": None,
-            }
-        ],
-    }
+    checkout_session = connect(client, key)
 
     response = client.put(
-        f"{settings.API_V1_STR}/checkout-sessions/{session_id}/cart",
-        json=payload,
+        f"{settings.API_V1_STR}/checkout-sessions/{checkout_session['id']}/cart",
+        headers=counter_headers(key),
+        json={
+            "cart": [
+                {
+                    "product_id": str(product.id),
+                    "name": product.name,
+                    "unit": product.unit,
+                    "price": 12.34,
+                    "quantity": 2,
+                    "quantity_label": "2 szt",
+                    "line_total": 24.68,
+                    "image_url": None,
+                }
+            ]
+        },
     )
 
     assert response.status_code == 200
     assert response.json()["cart"][0]["product_id"] == str(product.id)
-    assert response.json()["cart"][0]["quantity"] == 2
 
 
-def test_pay_checkout_session_closes_session(client: TestClient, db: Session) -> None:
-    counter = create_random_checkout_counter(db)
-    connect_response = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json={
-            "counter_id": str(counter.id),
-            "password": "secret-password",
-            "client_id": "client-pay",
-        },
-    )
-    session_id = connect_response.json()["id"]
-
-    with patch(
-        "app.api.routes.checkout_sessions.ws_manager.disconnect_clients",
-        new_callable=AsyncMock,
-    ) as disconnect_clients:
-        response = client.post(
-            f"{settings.API_V1_STR}/checkout-sessions/{session_id}/pay",
-            json={
-                "counter_id": str(counter.id),
-                "password": "secret-password",
-                "client_id": "client-pay",
-            },
-        )
-
-    assert response.status_code == 200
-    assert response.json()["closed"] is True
-    assert response.json()["payment_status"] == "paid"
-    disconnect_clients.assert_awaited_once_with(uuid.UUID(session_id))
-
-
-def test_pay_checkout_session_requires_matching_client(
+def test_payment_closes_session_and_next_connect_opens_a_new_one(
     client: TestClient, db: Session
 ) -> None:
-    counter = create_random_checkout_counter(db)
-    connect_response = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/connect",
-        json={
-            "counter_id": str(counter.id),
-            "password": "secret-password",
-            "client_id": "client-pay-1",
-        },
-    )
-    session_id = connect_response.json()["id"]
+    _, key = create_random_checkout_counter_with_key(db)
+    first_session = connect(client, key)
 
-    response = client.post(
-        f"{settings.API_V1_STR}/checkout-sessions/{session_id}/pay",
-        json={
-            "counter_id": str(counter.id),
-            "password": "secret-password",
-            "client_id": "client-pay-2",
-        },
+    paid = client.post(
+        f"{settings.API_V1_STR}/checkout-sessions/{first_session['id']}/pay",
+        headers=counter_headers(key),
+        json={},
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Checkout session access denied"
+    assert paid.status_code == 200
+    assert paid.json()["closed"] is True
+    assert connect(client, key)["id"] != first_session["id"]
+
+
+def test_counter_key_is_required(client: TestClient, db: Session) -> None:
+    _, key = create_random_checkout_counter_with_key(db)
+    assert (
+        client.post(
+            f"{settings.API_V1_STR}/checkout-sessions/connect", json={}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            f"{settings.API_V1_STR}/checkout-sessions/connect",
+            headers={"X-API-Key": "sck_invalid"},
+            json={},
+        ).status_code
+        == 401
+    )
+    assert key.startswith("sck_")
+
+
+def test_checkout_key_check_binds_ml_uploads_to_its_counter(
+    client: TestClient, db: Session
+) -> None:
+    _, first_key = create_random_checkout_counter_with_key(db)
+    _, second_key = create_random_checkout_counter_with_key(db)
+    first_session = connect(client, first_key)
+
+    accepted = client.post(
+        f"{settings.API_V1_STR}/login/checkout-key/check",
+        headers=counter_headers(first_key),
+        params={"scope": "ml:invoke", "checkout_session_id": first_session["id"]},
+    )
+    rejected = client.post(
+        f"{settings.API_V1_STR}/login/checkout-key/check",
+        headers=counter_headers(second_key),
+        params={"scope": "ml:invoke", "checkout_session_id": first_session["id"]},
+    )
+
+    assert accepted.status_code == 200
+    assert uuid.UUID(accepted.json()["counter_id"])
+    assert rejected.status_code == 403

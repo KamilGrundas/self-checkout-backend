@@ -1,22 +1,31 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlmodel import col, func, select
 
 from app import crud
 from app.api.deps import SessionDep, get_current_active_superuser
+from app.core.config import settings
+from app.core.ws_manager import manager as ws_manager
 from app.models import (
     CheckoutCounter,
+    CheckoutCounterApiKeyCreated,
     CheckoutCounterCreate,
+    CheckoutCounterCreated,
     CheckoutCounterPublic,
-    CheckoutCounterSelfSettingsUpdate,
     CheckoutCountersPublic,
     CheckoutCounterUpdate,
+    CheckoutSession,
     Message,
 )
 
 router = APIRouter(prefix="/checkout-counters", tags=["checkout-counters"])
+
+
+def _require_api_keys_enabled() -> None:
+    if not settings.API_KEYS_ENABLED:
+        raise HTTPException(status_code=403, detail="API keys are disabled")
 
 
 def _validate_camera_selection(
@@ -55,13 +64,22 @@ def read_checkout_counters(session: SessionDep) -> Any:
 
 @router.post(
     "/",
-    response_model=CheckoutCounterPublic,
+    response_model=CheckoutCounterCreated,
     dependencies=[Depends(get_current_active_superuser)],
 )
 def create_checkout_counter(
     *, session: SessionDep, counter_in: CheckoutCounterCreate
 ) -> Any:
-    return crud.create_checkout_counter(session=session, counter_in=counter_in)
+    _require_api_keys_enabled()
+    counter, raw_key = crud.create_checkout_counter(
+        session=session, counter_in=counter_in
+    )
+    return CheckoutCounterCreated(
+        **CheckoutCounterPublic.model_validate(
+            counter, from_attributes=True
+        ).model_dump(),
+        api_key=raw_key,
+    )
 
 
 @router.put(
@@ -81,25 +99,28 @@ def update_checkout_counter(
     )
 
 
-@router.put("/me/settings", response_model=CheckoutCounterPublic)
-def update_self_checkout_counter_settings(
-    *, session: SessionDep, payload: CheckoutCounterSelfSettingsUpdate
-) -> Any:
-    counter = crud.authenticate_checkout_counter(
-        session=session, counter_id=payload.counter_id, password=payload.password
-    )
+@router.post(
+    "/{id}/api-key/rotate",
+    response_model=CheckoutCounterApiKeyCreated,
+    dependencies=[Depends(get_current_active_superuser)],
+)
+def rotate_checkout_counter_api_key(
+    *, session: SessionDep, id: uuid.UUID, background_tasks: BackgroundTasks
+) -> CheckoutCounterApiKeyCreated:
+    _require_api_keys_enabled()
+    counter = session.get(CheckoutCounter, id)
     if not counter:
-        raise HTTPException(
-            status_code=403, detail="Invalid checkout counter credentials"
+        raise HTTPException(status_code=404, detail="Checkout counter not found")
+    raw_key = crud.rotate_checkout_counter_api_key(session=session, counter=counter)
+    sessions = session.exec(
+        select(CheckoutSession).where(
+            CheckoutSession.counter_id == counter.id,
+            col(CheckoutSession.closed).is_(False),
         )
-    settings_data = payload.model_dump(
-        exclude_unset=True, exclude={"counter_id", "password"}
-    )
-    update = CheckoutCounterUpdate.model_validate(settings_data)
-    _validate_camera_selection(counter, update)
-    return crud.update_checkout_counter(
-        session=session, db_counter=counter, counter_in=update
-    )
+    ).all()
+    for checkout_session in sessions:
+        background_tasks.add_task(ws_manager.disconnect_clients, checkout_session.id)
+    return CheckoutCounterApiKeyCreated(api_key=raw_key)
 
 
 @router.delete(
@@ -107,10 +128,17 @@ def update_self_checkout_counter_settings(
     response_model=Message,
     dependencies=[Depends(get_current_active_superuser)],
 )
-def delete_checkout_counter(session: SessionDep, id: uuid.UUID) -> Message:
+def delete_checkout_counter(
+    session: SessionDep, id: uuid.UUID, background_tasks: BackgroundTasks
+) -> Message:
     counter = session.get(CheckoutCounter, id)
     if not counter:
         raise HTTPException(status_code=404, detail="Checkout counter not found")
+    sessions = session.exec(
+        select(CheckoutSession).where(CheckoutSession.counter_id == counter.id)
+    ).all()
     session.delete(counter)
     session.commit()
+    for checkout_session in sessions:
+        background_tasks.add_task(ws_manager.disconnect_clients, checkout_session.id)
     return Message(message="Checkout counter deleted successfully")

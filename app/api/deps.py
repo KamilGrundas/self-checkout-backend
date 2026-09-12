@@ -9,11 +9,14 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.core import security
-from app.core.api_keys import authenticate_api_key
+from app.core.api_keys import (
+    authenticate_api_key,
+    authenticate_checkout_counter_api_key,
+)
 from app.core.config import settings
 from app.core.db import engine
 from app.core.oidc import oidc_user
-from app.models import TokenPayload, User
+from app.models import CheckoutCounter, TokenPayload, User
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token", auto_error=False
@@ -93,6 +96,24 @@ optional_bearer = OAuth2PasswordBearer(
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 OptionalBearer = Annotated[str | None, Depends(optional_bearer)]
 OptionalApiKey = Annotated[str | None, Depends(api_key_header)]
+
+
+def require_checkout_counter(
+    request: Request, session: SessionDep, _bearer: OptionalBearer, _key: OptionalApiKey
+) -> CheckoutCounter:
+    raw_key = request.headers.get("X-API-Key")
+    authorization = request.headers.get("Authorization", "")
+    if raw_key and authorization:
+        raise HTTPException(400, "Use one authentication method per request")
+    if not raw_key:
+        raise HTTPException(401, "Checkout counter API key required")
+    _, counter = authenticate_checkout_counter_api_key(
+        session, raw_key, "checkout:session"
+    )
+    return counter
+
+
+CheckoutCounterDep = Annotated[CheckoutCounter, Depends(require_checkout_counter)]
 
 
 def require_catalog_read(
