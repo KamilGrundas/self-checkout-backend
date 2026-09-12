@@ -16,6 +16,7 @@ from app.models import (
     Item,
     Product,
     User,
+    VisionInferenceIntegration,
 )
 from tests.utils.user import authentication_token_from_email
 from tests.utils.utils import get_superuser_token_headers
@@ -24,6 +25,7 @@ from tests.utils.utils import get_superuser_token_headers
 def reset_test_data(session: Session) -> None:
     session.execute(delete(ApiKey))
     session.execute(delete(AutolabelSettings))
+    session.execute(delete(VisionInferenceIntegration))
     statement = delete(CheckoutSession)
     session.execute(statement)
     statement = delete(CheckoutCounter)

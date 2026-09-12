@@ -32,7 +32,7 @@ def test_role_keys_enforce_permissions(client, superuser_token_headers, header):
         for path in [
             "users/",
             "api-keys/",
-            "api-keys/integrations/vision-inference",
+            "vision-inference-integrations/",
             "system-settings/autolabel",
             "checkout-counters/",
         ]:

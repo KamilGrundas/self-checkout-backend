@@ -8,7 +8,6 @@ import httpx
 from pydantic import BaseModel
 
 from app.core.autolabel_credentials import inference_headers
-from app.models import AutolabelSettings
 
 
 class AvailableModel(BaseModel):
@@ -22,13 +21,12 @@ class AvailableModels(BaseModel):
     active_model: str | None = None
 
 
-def discover_models(stored: AutolabelSettings) -> AvailableModels:
-    endpoint = stored.endpoint_url or ""
+def discover_models(endpoint: str, api_key_encrypted: str | None) -> AvailableModels:
     parsed = urlsplit(endpoint)
     if not endpoint.endswith("/chat/completions") or parsed.query or parsed.fragment:
         raise ValueError("Save a chat/completions endpoint before fetching models")
     base = endpoint.removesuffix("/chat/completions")
-    headers = inference_headers(stored.api_key_encrypted, endpoint)
+    headers = inference_headers(api_key_encrypted, endpoint)
     with httpx.Client(
         timeout=httpx.Timeout(15, connect=5), follow_redirects=False, trust_env=False
     ) as client:

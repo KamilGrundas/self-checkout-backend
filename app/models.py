@@ -100,6 +100,7 @@ class AutolabelSettingsRuntime(AutolabelSettingsPublic):
 
 class AutolabelSettings(AutolabelSettingsBase, table=True):
     api_key_encrypted: str | None = Field(default=None, repr=False)
+    active_integration_id: uuid.UUID | None = Field(default=None, index=True)
     __table_args__ = (CheckConstraint("id = 1", name="ck_autolabelsettings_singleton"),)
 
     id: int = Field(default=1, primary_key=True)
@@ -107,6 +108,58 @@ class AutolabelSettings(AutolabelSettingsBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
+
+
+class VisionInferenceIntegrationBase(SQLModel):
+    name: str = Field(min_length=1, max_length=255)
+    endpoint_url: str = Field(max_length=2048)
+    model_name: str | None = Field(default=None, max_length=512)
+    read_timeout_seconds: int = Field(default=120, ge=1, le=600)
+
+    @field_validator("endpoint_url")
+    @classmethod
+    def validate_endpoint_url(cls, value: str) -> str:
+        normalized = validate_inference_endpoint_url(value)
+        if normalized is None:
+            raise ValueError("Inference endpoint is required")
+        return normalized
+
+
+class VisionInferenceIntegrationCreate(VisionInferenceIntegrationBase):
+    api_key: str = Field(min_length=1, max_length=4096)
+
+
+class VisionInferenceIntegrationUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    endpoint_url: str | None = Field(default=None, max_length=2048)
+    model_name: str | None = Field(default=None, max_length=512)
+    read_timeout_seconds: int | None = Field(default=None, ge=1, le=600)
+
+    @field_validator("endpoint_url")
+    @classmethod
+    def validate_endpoint_url(cls, value: str | None) -> str | None:
+        return validate_inference_endpoint_url(value)
+
+
+class VisionInferenceIntegration(VisionInferenceIntegrationBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    api_key_encrypted: str | None = Field(default=None, repr=False)
+    active: bool = False
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )  # type: ignore
+    updated_at: datetime = Field(
+        default_factory=get_datetime_utc, sa_type=DateTime(timezone=True)
+    )  # type: ignore
+
+
+class VisionInferenceIntegrationPublic(VisionInferenceIntegrationBase):
+    id: uuid.UUID
+    api_key_configured: bool
+    configured: bool
+    active: bool
+    active_model: str | None = None
+    model_loaded: bool = False
 
 
 # Database model, database table inferred from class name

@@ -12,6 +12,7 @@ from app.api.routes import (
     system_settings,
     users,
     utils,
+    vision_inference_integrations,
     ws,
 )
 from app.core.config import settings
@@ -24,6 +25,7 @@ api_router.include_router(utils.router)
 api_router.include_router(items.router)
 api_router.include_router(products.router)
 api_router.include_router(system_settings.router)
+api_router.include_router(vision_inference_integrations.router)
 api_router.include_router(categories.router)
 api_router.include_router(checkout_counters.router)
 api_router.include_router(checkout_sessions.router)

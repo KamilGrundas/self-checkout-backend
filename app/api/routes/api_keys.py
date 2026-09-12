@@ -5,13 +5,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 from sqlmodel import col, select
 
 from app.api.deps import SessionDep, get_current_active_superuser
-from app.core.autolabel_credentials import encrypt_api_key
 from app.core.config import settings
-from app.models import ApiKey, AutolabelSettings, Message, User
+from app.models import ApiKey, Message, User
 
 router = APIRouter(
     prefix="/api-keys",
@@ -89,53 +88,3 @@ def revoke_api_key(key_id: uuid.UUID, session: SessionDep) -> Message:
     session.add(key)
     session.commit()
     return Message(message="API key revoked")
-
-
-class VisionInferenceKeyPublic(BaseModel):
-    name: str = "Vision inference provider"
-    endpoint_url: str | None = None
-    configured: bool = False
-
-
-class VisionInferenceKeyUpdate(BaseModel):
-    endpoint_url: str
-    api_key: SecretStr | None = None
-    clear_api_key: bool = False
-
-
-@router.get("/integrations/vision-inference", response_model=VisionInferenceKeyPublic)
-def read_vision_inference_key(session: SessionDep) -> VisionInferenceKeyPublic:
-    stored = session.get(AutolabelSettings, 1)
-    return VisionInferenceKeyPublic(
-        endpoint_url=stored.endpoint_url if stored else None,
-        configured=bool(stored and stored.api_key_encrypted),
-    )
-
-
-@router.put("/integrations/vision-inference", response_model=VisionInferenceKeyPublic)
-def update_vision_inference_key(
-    body: VisionInferenceKeyUpdate, session: SessionDep
-) -> VisionInferenceKeyPublic:
-    stored = session.get(AutolabelSettings, 1)
-    if (
-        not stored
-        or not stored.endpoint_url
-        or body.endpoint_url != stored.endpoint_url
-    ):
-        raise HTTPException(
-            409, "Save the autolabel endpoint first and refresh API Keys"
-        )
-    raw = body.api_key.get_secret_value().strip() if body.api_key else ""
-    if raw and (len(raw) > 4096 or any(c.isspace() for c in raw)):
-        raise HTTPException(422, "Invalid API token")
-    if raw and body.clear_api_key:
-        raise HTTPException(422, "Choose replacing or removing the API token")
-    if raw and not stored.endpoint_url.startswith("https://"):
-        raise HTTPException(422, "An API token requires HTTPS")
-    if body.clear_api_key:
-        stored.api_key_encrypted = None
-    elif raw:
-        stored.api_key_encrypted = encrypt_api_key(raw, stored.endpoint_url)
-    session.add(stored)
-    session.commit()
-    return read_vision_inference_key(session)
