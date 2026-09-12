@@ -41,6 +41,7 @@ def _public(row: VisionInferenceIntegration) -> VisionInferenceIntegrationPublic
         name=row.name,
         endpoint_url=row.endpoint_url,
         model_name=row.model_name,
+        read_timeout_seconds=row.read_timeout_seconds,
         api_key_configured=bool(row.api_key_encrypted),
         configured=_configured(row),
         active=row.active,

@@ -82,6 +82,26 @@ def test_model_selection_and_activation_enable_autolabel(
     )
 
 
+def test_integration_allows_a_read_timeout_up_to_6000_seconds(
+    client, superuser_token_headers
+):
+    integration = create(client, superuser_token_headers)
+    response = client.patch(
+        f"{URL}{integration['id']}",
+        headers=superuser_token_headers,
+        json={"read_timeout_seconds": 6000},
+    )
+    assert response.status_code == 200
+    assert response.json()["read_timeout_seconds"] == 6000
+
+    response = client.patch(
+        f"{URL}{integration['id']}",
+        headers=superuser_token_headers,
+        json={"read_timeout_seconds": 6001},
+    )
+    assert response.status_code == 422
+
+
 def test_discovery_reports_loaded_model_without_leaking_key(
     client, superuser_token_headers, monkeypatch
 ):

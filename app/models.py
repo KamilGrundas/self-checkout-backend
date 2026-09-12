@@ -76,7 +76,7 @@ class AutolabelSettingsBase(SQLModel):
     endpoint_url: str | None = Field(default=None, max_length=2048)
     max_tokens: int = Field(default=512, ge=1, le=4096)
     connect_timeout_seconds: int = Field(default=5, ge=1, le=30)
-    read_timeout_seconds: int = Field(default=120, ge=1, le=600)
+    read_timeout_seconds: int = Field(default=120, ge=1, le=6000)
 
     @field_validator("endpoint_url")
     @classmethod
@@ -114,7 +114,7 @@ class VisionInferenceIntegrationBase(SQLModel):
     name: str = Field(min_length=1, max_length=255)
     endpoint_url: str = Field(max_length=2048)
     model_name: str | None = Field(default=None, max_length=512)
-    read_timeout_seconds: int = Field(default=120, ge=1, le=600)
+    read_timeout_seconds: int = Field(default=120, ge=1, le=6000)
 
     @field_validator("endpoint_url")
     @classmethod
@@ -133,7 +133,7 @@ class VisionInferenceIntegrationUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     endpoint_url: str | None = Field(default=None, max_length=2048)
     model_name: str | None = Field(default=None, max_length=512)
-    read_timeout_seconds: int | None = Field(default=None, ge=1, le=600)
+    read_timeout_seconds: int | None = Field(default=None, ge=1, le=6000)
 
     @field_validator("endpoint_url")
     @classmethod
