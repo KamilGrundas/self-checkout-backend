@@ -17,7 +17,6 @@ ID = str(uuid.uuid4())
         ("PATCH", "/users/me"),
         ("PATCH", "/users/me/password"),
         ("DELETE", "/users/me"),
-        ("PUT", f"/users/{ID}/oidc-identity"),
         ("GET", "/items/"),
         ("POST", "/items/"),
         ("GET", f"/items/{ID}"),

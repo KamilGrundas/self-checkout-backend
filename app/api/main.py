@@ -30,9 +30,5 @@ api_router.include_router(checkout_sessions.router)
 api_router.include_router(ws.router)
 
 
-if (
-    settings.ENVIRONMENT == "local"
-    and settings.AUTH_MODE == "local"
-    and settings.LOCAL_SIGNUP_ENABLED
-):
+if settings.ENVIRONMENT == "local" and settings.LOCAL_SIGNUP_ENABLED:
     api_router.include_router(private.router)

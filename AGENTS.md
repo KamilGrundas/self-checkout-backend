@@ -14,7 +14,8 @@ Run `bash scripts/lint.sh` and the relevant test command when dependencies are
 available. Build validation uses the Dockerfile. Integration validation uses a
 locally selected environment and is not assumed by repository checks.
 
-Configuration uses generic database, S3-compatible storage, OIDC, and
-OpenAI-compatible vision inference contracts. Do not add host names, provider
-brands, concrete origins, or runtime-specific assumptions. Browser image URLs
-use the configured `BACKEND_PUBLIC_URL`, not internal S3 DNS names.
+Configuration uses generic database, S3-compatible storage, local JWT
+authentication, and OpenAI-compatible vision inference contracts. Do not add
+host names, provider brands, concrete origins, or runtime-specific assumptions.
+Browser image URLs use the configured `BACKEND_PUBLIC_URL`, not internal S3 DNS
+names.

@@ -1,7 +1,6 @@
 import secrets
 import warnings
 from typing import Annotated, Any, Literal, Self
-from urllib.parse import urlsplit
 
 from pydantic import (
     AnyHttpUrl,
@@ -32,32 +31,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     API_V1_STR: str = "/api/v1"
-    AUTH_MODE: Literal["local", "oidc"] = "local"
-    OIDC_ISSUER: str = ""
-    OIDC_CLIENT_ID: str = ""
-    OIDC_USER_GROUP: str = "self-checkout-dev-users"
-    OIDC_ADMIN_GROUP: str = "self-checkout-dev-admins"
-    OIDC_BUTTON_LABEL: str = "Single sign-on"
     API_KEYS_ENABLED: bool = True
     LOCAL_SIGNUP_ENABLED: bool = False
-
-    @model_validator(mode="after")
-    def _validate_auth(self) -> Self:
-        if self.AUTH_MODE != "local":
-            issuer = urlsplit(self.OIDC_ISSUER)
-            if (
-                issuer.scheme != "https"
-                or not issuer.hostname
-                or issuer.username
-                or issuer.password
-                or issuer.query
-                or issuer.fragment
-                or not self.OIDC_CLIENT_ID
-            ):
-                raise ValueError("OIDC requires an HTTPS issuer and client ID")
-            if not self.OIDC_USER_GROUP or not self.OIDC_ADMIN_GROUP:
-                raise ValueError("OIDC access groups must be configured")
-        return self
 
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days

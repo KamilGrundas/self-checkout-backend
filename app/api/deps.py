@@ -15,7 +15,6 @@ from app.core.api_keys import (
 )
 from app.core.config import settings
 from app.core.db import engine
-from app.core.oidc import oidc_user
 from app.models import CheckoutCounter, TokenPayload, User
 
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -56,8 +55,6 @@ def get_current_user(
         )
     if not token:
         raise HTTPException(401, "Authentication required")
-    if settings.AUTH_MODE == "oidc":
-        return oidc_user(session, token)
     try:
         payload = jwt.decode(
             token,

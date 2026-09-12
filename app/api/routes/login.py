@@ -28,7 +28,6 @@ def login_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests
     """
-    require_local_auth()
     user = crud.authenticate(
         session=session, email=form_data.username, password=form_data.password
     )
@@ -51,10 +50,7 @@ def test_token(current_user: CurrentUser) -> Any:
     """
     Test access token
     """
-    return UserPublic(
-        **current_user.model_dump(),
-        auth_source="oidc" if settings.AUTH_MODE == "oidc" else "local",
-    )
+    return current_user
 
 
 @router.post("/password-recovery/{email}")
@@ -62,7 +58,6 @@ def recover_password(email: str, session: SessionDep) -> Message:
     """
     Password Recovery
     """
-    require_local_auth()
     user = crud.get_user_by_email(session=session, email=email)
 
     # Always return the same response to prevent email enumeration attacks
@@ -87,11 +82,9 @@ def reset_password(session: SessionDep, body: NewPassword) -> Message:
     """
     Reset password
     """
-    require_local_auth()
     email = verify_password_reset_token(token=body.token)
     if not email:
         raise HTTPException(status_code=400, detail="Invalid token")
-    require_local_auth()
     user = crud.get_user_by_email(session=session, email=email)
     if not user:
         # Don't reveal that the user doesn't exist - use same error as invalid token
@@ -116,7 +109,6 @@ def recover_password_html_content(email: str, session: SessionDep) -> Any:
     """
     HTML Content for Password Recovery
     """
-    require_local_auth()
     user = crud.get_user_by_email(session=session, email=email)
 
     if not user:
@@ -134,25 +126,9 @@ def recover_password_html_content(email: str, session: SessionDep) -> Any:
     )
 
 
-def require_local_auth() -> None:
-    if settings.AUTH_MODE != "local":
-        raise HTTPException(403, "Local authentication is disabled")
-
-
-@router.get("/login/config")
-def auth_config() -> dict[str, Any]:
-    return {
-        "mode": settings.AUTH_MODE,
-        "signup_enabled": settings.AUTH_MODE == "local"
-        and settings.LOCAL_SIGNUP_ENABLED,
-        "oidc": {
-            "issuer": settings.OIDC_ISSUER,
-            "client_id": settings.OIDC_CLIENT_ID,
-            "label": settings.OIDC_BUTTON_LABEL,
-        }
-        if settings.AUTH_MODE == "oidc"
-        else None,
-    }
+@router.get("/login/registration-config")
+def registration_config() -> dict[str, bool]:
+    return {"signup_enabled": settings.LOCAL_SIGNUP_ENABLED}
 
 
 @router.post("/login/api-key/check")

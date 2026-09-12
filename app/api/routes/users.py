@@ -2,8 +2,6 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, delete, func, select
 
 from app import crud
@@ -12,7 +10,6 @@ from app.api.deps import (
     SessionDep,
     get_current_active_superuser,
 )
-from app.api.routes.login import require_local_auth
 from app.core.config import settings
 from app.core.security import get_password_hash, verify_password
 from app.models import (
@@ -30,36 +27,6 @@ from app.models import (
 from app.utils import generate_new_account_email, send_email
 
 router = APIRouter(prefix="/users", tags=["users"])
-
-
-class OidcIdentityLink(BaseModel):
-    subject: str = Field(min_length=1, max_length=255)
-
-
-@router.put(
-    "/{user_id}/oidc-identity",
-    dependencies=[Depends(get_current_active_superuser)],
-    response_model=Message,
-)
-def link_oidc_identity(
-    user_id: uuid.UUID, body: OidcIdentityLink, session: SessionDep
-) -> Message:
-    if not settings.OIDC_ISSUER.startswith("https://"):
-        raise HTTPException(400, "Configure OIDC_ISSUER before linking identities")
-    user = session.get(User, user_id)
-    if not user:
-        raise HTTPException(404, "User not found")
-    if user.oidc_subject:
-        raise HTTPException(409, "Identity is already linked")
-    user.oidc_issuer = settings.OIDC_ISSUER
-    user.oidc_subject = body.subject
-    session.add(user)
-    try:
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        raise HTTPException(409, "Identity is already linked to another user")
-    return Message(message="OIDC identity linked explicitly")
 
 
 @router.get(
@@ -90,7 +57,6 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
     """
     Create new user.
     """
-    require_local_auth()
     user = crud.get_user_by_email(session=session, email=user_in.email)
     if user:
         raise HTTPException(
@@ -123,8 +89,6 @@ def update_user_me(
     Update own user.
     """
 
-    if current_user.oidc_subject:
-        raise HTTPException(403, "Manage this identity in the identity provider")
     if user_in.email:
         existing_user = crud.get_user_by_email(session=session, email=user_in.email)
         if existing_user and existing_user.id != current_user.id:
@@ -136,10 +100,7 @@ def update_user_me(
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
-    return UserPublic(
-        **current_user.model_dump(),
-        auth_source="oidc" if settings.AUTH_MODE == "oidc" else "local",
-    )
+    return current_user
 
 
 @router.patch(
@@ -153,7 +114,6 @@ def update_password_me(
     """
     Update own password.
     """
-    require_local_auth()
     verified, _ = verify_password(body.current_password, current_user.hashed_password)
     if not verified:
         raise HTTPException(status_code=400, detail="Incorrect password")
@@ -173,10 +133,7 @@ def read_user_me(current_user: CurrentUser) -> Any:
     """
     Get current user.
     """
-    return UserPublic(
-        **current_user.model_dump(),
-        auth_source="oidc" if settings.AUTH_MODE == "oidc" else "local",
-    )
+    return current_user
 
 
 @router.delete(
@@ -200,7 +157,6 @@ def register_user(session: SessionDep, user_in: UserRegister) -> Any:
     """
     Create new user without the need to be logged in.
     """
-    require_local_auth()
     if not settings.LOCAL_SIGNUP_ENABLED:
         raise HTTPException(403, "Self-registration is disabled")
     user = crud.get_user_by_email(session=session, email=user_in.email)
@@ -259,10 +215,6 @@ def update_user(
             status_code=404,
             detail="The user with this id does not exist in the system",
         )
-    if db_user.oidc_subject and any(
-        k in user_in.model_fields_set for k in ("email", "password", "is_superuser")
-    ):
-        raise HTTPException(403, "Manage identity and roles in the identity provider")
     if user_in.email:
         existing_user = crud.get_user_by_email(session=session, email=user_in.email)
         if existing_user and existing_user.id != user_id:
