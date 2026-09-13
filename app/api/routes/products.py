@@ -9,6 +9,7 @@ from app import crud
 from app.api.deps import SessionDep, require_catalog_read, require_catalog_write
 from app.core import object_storage
 from app.models import (
+    CatalogLanguage,
     Category,
     Message,
     Product,
@@ -24,7 +25,12 @@ router = APIRouter(prefix="/products", tags=["products"])
 @router.get(
     "/", response_model=ProductsPublic, dependencies=[Depends(require_catalog_read)]
 )
-def read_products(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
+def read_products(
+    session: SessionDep,
+    skip: int = 0,
+    limit: int = 100,
+    language: CatalogLanguage = CatalogLanguage.en,
+) -> Any:
     """
     Retrieve products.
     """
@@ -39,7 +45,7 @@ def read_products(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     )
     products = session.exec(statement).all()
     return ProductsPublic(
-        data=[ProductPublic.from_product(product) for product in products],
+        data=[ProductPublic.from_product(product, language) for product in products],
         count=count,
     )
 
@@ -60,7 +66,9 @@ def read_product_image(object_name: str) -> Response:
 @router.get(
     "/{id}", response_model=ProductPublic, dependencies=[Depends(require_catalog_read)]
 )
-def read_product(session: SessionDep, id: uuid.UUID) -> Any:
+def read_product(
+    session: SessionDep, id: uuid.UUID, language: CatalogLanguage = CatalogLanguage.en
+) -> Any:
     """
     Get product by ID.
     """
@@ -72,7 +80,7 @@ def read_product(session: SessionDep, id: uuid.UUID) -> Any:
     product = session.exec(statement).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return ProductPublic.from_product(product)
+    return ProductPublic.from_product(product, language)
 
 
 @router.post(
@@ -80,20 +88,27 @@ def read_product(session: SessionDep, id: uuid.UUID) -> Any:
     response_model=ProductPublic,
     dependencies=[Depends(require_catalog_write)],
 )
-def create_product(*, session: SessionDep, product_in: ProductCreate) -> Any:
+def create_product(
+    *,
+    session: SessionDep,
+    product_in: ProductCreate,
+    language: CatalogLanguage = CatalogLanguage.en,
+) -> Any:
     """
     Create new product.
     """
     if product_in.category_id and not session.get(Category, product_in.category_id):
         raise HTTPException(status_code=404, detail="Category not found")
-    product = crud.create_product(session=session, product_in=product_in)
+    product = crud.create_product(
+        session=session, product_in=product_in, language=language
+    )
     statement = (
         select(Product)
         .options(selectinload(Product.category))  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         .where(Product.id == product.id)
     )
     product_with_category = session.exec(statement).one()
-    return ProductPublic.from_product(product_with_category)
+    return ProductPublic.from_product(product_with_category, language)
 
 
 @router.put(
@@ -102,7 +117,11 @@ def create_product(*, session: SessionDep, product_in: ProductCreate) -> Any:
     dependencies=[Depends(require_catalog_write)],
 )
 def update_product(
-    *, session: SessionDep, id: uuid.UUID, product_in: ProductUpdate
+    *,
+    session: SessionDep,
+    id: uuid.UUID,
+    product_in: ProductUpdate,
+    language: CatalogLanguage = CatalogLanguage.en,
 ) -> Any:
     """
     Update a product.
@@ -111,12 +130,20 @@ def update_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     update_dict = product_in.model_dump(exclude_unset=True)
+    name = update_dict.pop("name", None)
     if "category_id" in update_dict and update_dict["category_id"] is None:
         update_dict["category_id"] = crud.ensure_default_category(session).id
     if "category_id" in update_dict and update_dict["category_id"] is not None:
         if not session.get(Category, update_dict["category_id"]):
             raise HTTPException(status_code=404, detail="Category not found")
     product.sqlmodel_update(update_dict)
+    if name is not None:
+        product.name = name
+        setattr(
+            product,
+            f"name_{language}",
+            name,
+        )
     session.add(product)
     session.commit()
     statement = (
@@ -125,7 +152,7 @@ def update_product(
         .where(Product.id == product.id)
     )
     product_with_category = session.exec(statement).one()
-    return ProductPublic.from_product(product_with_category)
+    return ProductPublic.from_product(product_with_category, language)
 
 
 @router.post(
@@ -134,7 +161,11 @@ def update_product(
     dependencies=[Depends(require_catalog_write)],
 )
 async def upload_product_image(
-    *, session: SessionDep, id: uuid.UUID, file: UploadFile = File(...)
+    *,
+    session: SessionDep,
+    id: uuid.UUID,
+    file: UploadFile = File(...),
+    language: CatalogLanguage = CatalogLanguage.en,
 ) -> Any:
     """
     Upload a product image.
@@ -165,7 +196,7 @@ async def upload_product_image(
         .where(Product.id == product.id)
     )
     product_with_category = session.exec(statement).one()
-    return ProductPublic.from_product(product_with_category)
+    return ProductPublic.from_product(product_with_category, language)
 
 
 @router.delete("/{id}", dependencies=[Depends(require_catalog_write)])

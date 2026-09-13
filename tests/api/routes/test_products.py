@@ -30,6 +30,52 @@ def test_create_product(
     assert "id" in content
 
 
+def test_product_names_follow_the_selected_language(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    created = client.post(
+        f"{settings.API_V1_STR}/products/?language=pl",
+        headers=superuser_token_headers,
+        json={"name": "Jabłko", "price": "4.99", "unit": "kg"},
+    )
+    assert created.status_code == 200
+    product = created.json()
+    assert product["name"] == "Jabłko"
+    assert product["name_pl"] == "Jabłko"
+    assert product["name_en"] is None
+
+    translated = client.put(
+        f"{settings.API_V1_STR}/products/{product['id']}?language=pl",
+        headers=superuser_token_headers,
+        json={"name_en": "Apple"},
+    )
+    assert translated.status_code == 200
+    assert translated.json()["name"] == "Jabłko"
+
+    english = client.get(
+        f"{settings.API_V1_STR}/products/{product['id']}?language=en",
+        headers=superuser_token_headers,
+    )
+    assert english.json()["name"] == "Apple"
+
+
+def test_product_name_falls_back_to_the_other_translation(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    created = client.post(
+        f"{settings.API_V1_STR}/products/?language=pl",
+        headers=superuser_token_headers,
+        json={"name": "Jabłko", "price": "4.99", "unit": "kg"},
+    )
+    assert created.status_code == 200
+
+    english = client.get(
+        f"{settings.API_V1_STR}/products/{created.json()['id']}?language=en",
+        headers=superuser_token_headers,
+    )
+    assert english.json()["name"] == "Jabłko"
+
+
 def test_create_product_not_enough_permissions(
     client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:

@@ -256,6 +256,11 @@ class ProductUnit(StrEnum):
     pcs = "pcs"
 
 
+class CatalogLanguage(StrEnum):
+    en = "en"
+    pl = "pl"
+
+
 DEFAULT_CATEGORY_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 DEFAULT_CATEGORY_KEY = "other"
 DEFAULT_CATEGORY_NAME = "Other"
@@ -272,9 +277,13 @@ class CategoryCreate(SQLModel):
 
 class CategoryUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    name_en: str | None = Field(default=None, min_length=1, max_length=255)
+    name_pl: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class Category(CategoryBase, table=True):
+    name_en: str | None = Field(default=None, max_length=255)
+    name_pl: str | None = Field(default=None, max_length=255)
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc,
@@ -284,8 +293,23 @@ class Category(CategoryBase, table=True):
 
 
 class CategoryPublic(CategoryBase):
+    name_en: str | None = None
+    name_pl: str | None = None
     id: uuid.UUID
     created_at: datetime | None = None
+
+    @classmethod
+    def from_category(
+        cls, category: Category, language: CatalogLanguage
+    ) -> CategoryPublic:
+        return cls(
+            id=category.id,
+            key=category.key,
+            name=localized_catalog_name(category, language),
+            name_en=category.name_en,
+            name_pl=category.name_pl,
+            created_at=category.created_at,
+        )
 
 
 class CategoriesPublic(SQLModel):
@@ -307,6 +331,8 @@ class ProductCreate(ProductBase):
 
 class ProductUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    name_en: str | None = Field(default=None, min_length=1, max_length=255)
+    name_pl: str | None = Field(default=None, min_length=1, max_length=255)
     price: Decimal | None = Field(default=None, max_digits=10, decimal_places=2, ge=0)
     unit: ProductUnit | None = None
     image_url: str | None = Field(default=None, max_length=2048)
@@ -314,6 +340,8 @@ class ProductUpdate(SQLModel):
 
 
 class Product(ProductBase, table=True):
+    name_en: str | None = Field(default=None, max_length=255)
+    name_pl: str | None = Field(default=None, max_length=255)
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     category_id: uuid.UUID = Field(
         foreign_key="category.id", nullable=False, ondelete="RESTRICT"
@@ -326,19 +354,25 @@ class Product(ProductBase, table=True):
 
 
 class ProductPublic(ProductBase):
+    name_en: str | None = None
+    name_pl: str | None = None
     id: uuid.UUID
     category_id: uuid.UUID
     category_name: str
+    category_name_en: str | None = None
+    category_name_pl: str | None = None
     category_key: str
     created_at: datetime | None = None
 
     @classmethod
-    def from_product(cls, product: Product) -> ProductPublic:
+    def from_product(cls, product: Product, language: CatalogLanguage) -> ProductPublic:
         if not product.category:
             raise ValueError("Product category must be loaded")
         return cls(
             id=product.id,
-            name=product.name,
+            name=localized_catalog_name(product, language),
+            name_en=product.name_en,
+            name_pl=product.name_pl,
             price=product.price,
             unit=product.unit,
             image_url=public_url(product.image_url) if product.image_url else None,
@@ -346,10 +380,26 @@ class ProductPublic(ProductBase):
             if product.thumbnail_url
             else None,
             category_id=product.category_id,
-            category_name=product.category.name,
+            category_name=localized_catalog_name(product.category, language),
+            category_name_en=product.category.name_en,
+            category_name_pl=product.category.name_pl,
             category_key=product.category.key,
             created_at=product.created_at,
         )
+
+
+def localized_catalog_name(
+    catalog_item: Category | Product, language: CatalogLanguage
+) -> str:
+    preferred_name = (
+        catalog_item.name_en if language == CatalogLanguage.en else catalog_item.name_pl
+    )
+    return (
+        preferred_name
+        or catalog_item.name_en
+        or catalog_item.name_pl
+        or catalog_item.name
+    )
 
 
 class ProductsPublic(SQLModel):

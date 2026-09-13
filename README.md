@@ -80,7 +80,12 @@ http://127.0.0.1:8000
 ## Important Endpoints
 
 - `GET /api/v1/utils/health-check/`
-- `GET /api/v1/products/`
+- `GET /api/v1/products/?language=en|pl` — returns catalog display names in
+  the requested language, falling back to the available translation
+- `GET /api/v1/categories/?language=en|pl` — returns category display names
+  with the same fallback
+- `POST`/`PUT` product and category endpoints accept the same optional
+  `language` query parameter; a regular `name` is stored as that translation
 - `POST /api/v1/checkout-counters/` — creates a counter and returns its
   one-time API key; the key is bound to that counter and carries only catalog,
   session, and ML-invocation access
@@ -107,6 +112,12 @@ reports it again over the checkout-session WebSocket. Failed camera discovery
 does not erase the last successful inventory. Each new checkout session stores
 a snapshot of the counter's mode, selected cameras, and language; edits made
 while a session is active therefore apply to the next session.
+
+Products and categories store independent `name_en` and `name_pl` values. The
+API has no catalog-wide default-language setting: consumers request their
+current language with `language=en` or `language=pl`. A missing requested
+translation falls back to the other translation, then to the legacy `name`
+column for records created before translations were introduced.
 
 Scale-autolabel settings are stored in a singleton database row. Endpoint URLs
 accept only HTTP(S), reject embedded credentials and fragments, and deliberately

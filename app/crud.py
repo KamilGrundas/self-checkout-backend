@@ -13,6 +13,7 @@ from app.models import (
     DEFAULT_CATEGORY_KEY,
     DEFAULT_CATEGORY_NAME,
     ApiKey,
+    CatalogLanguage,
     Category,
     CategoryCreate,
     CategoryUpdate,
@@ -101,6 +102,15 @@ def _slugify_category_name(name: str) -> str:
     return slug or "category"
 
 
+def _set_localized_name(
+    catalog_item: Category | Product,
+    language: CatalogLanguage,
+    name: str,
+) -> None:
+    catalog_item.name = name
+    setattr(catalog_item, f"name_{language}", name)
+
+
 def ensure_default_category(session: Session) -> Category:
     category = session.get(Category, DEFAULT_CATEGORY_ID)
     if category:
@@ -110,6 +120,7 @@ def ensure_default_category(session: Session) -> Category:
         id=DEFAULT_CATEGORY_ID,
         key=DEFAULT_CATEGORY_KEY,
         name=DEFAULT_CATEGORY_NAME,
+        name_en=DEFAULT_CATEGORY_NAME,
     )
     session.add(category)
     session.commit()
@@ -117,7 +128,12 @@ def ensure_default_category(session: Session) -> Category:
     return category
 
 
-def create_category(*, session: Session, category_in: CategoryCreate) -> Category:
+def create_category(
+    *,
+    session: Session,
+    category_in: CategoryCreate,
+    language: CatalogLanguage = CatalogLanguage.en,
+) -> Category:
     base_key = _slugify_category_name(category_in.name)
     key = base_key
     suffix = 2
@@ -127,6 +143,7 @@ def create_category(*, session: Session, category_in: CategoryCreate) -> Categor
         suffix += 1
 
     db_category = Category(name=category_in.name, key=key)
+    _set_localized_name(db_category, language, category_in.name)
     session.add(db_category)
     session.commit()
     session.refresh(db_category)
@@ -134,20 +151,33 @@ def create_category(*, session: Session, category_in: CategoryCreate) -> Categor
 
 
 def update_category(
-    *, session: Session, db_category: Category, category_in: CategoryUpdate
+    *,
+    session: Session,
+    db_category: Category,
+    category_in: CategoryUpdate,
+    language: CatalogLanguage = CatalogLanguage.en,
 ) -> Category:
     category_data = category_in.model_dump(exclude_unset=True)
+    name = category_data.pop("name", None)
     db_category.sqlmodel_update(category_data)
+    if name is not None:
+        _set_localized_name(db_category, language, name)
     session.add(db_category)
     session.commit()
     session.refresh(db_category)
     return db_category
 
 
-def create_product(*, session: Session, product_in: ProductCreate) -> Product:
+def create_product(
+    *,
+    session: Session,
+    product_in: ProductCreate,
+    language: CatalogLanguage = CatalogLanguage.en,
+) -> Product:
     default_category = ensure_default_category(session)
     category_id = product_in.category_id or default_category.id
     db_product = Product.model_validate(product_in, update={"category_id": category_id})
+    _set_localized_name(db_product, language, product_in.name)
     session.add(db_product)
     session.commit()
     session.refresh(db_product)
